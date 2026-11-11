@@ -368,7 +368,7 @@ const MENU = [
     {name:'Lockpick',       price:2000},
     {name:'Adv Repair Kit', price:2500},
     {name:'Harness',        price:4000},
-    {name:'Chips',          price:[20000,25000]},
+    {name:'Racing Chip',    price:[20000,25000]},
   ]},
   {title:'Engines', color:'var(--orange)', items:[
     {section:'Blocks'},
@@ -623,7 +623,7 @@ $('menuGrid').addEventListener('click', e=>{
 function renderCart(){
   $('orderRows').innerHTML = Object.entries(cart).map(([n,c])=>{
     const p = ITEMS[n].price;
-    // range-priced items (Chips, Red Bins) let you set the price you're charging
+    // range-priced items (Racing Chip, Red Bins) let you set the price you're charging
     const unit = Array.isArray(p)
       ? `<label class="unit">$<input type="number" data-unit="${n}" min="${p[0]}" max="${p[1]}" step="1" value="${c.unit}" aria-label="${n} price each"> each <small>${priceText(p)}</small></label>`
       : `<span class="unit">${money(p)} each</span>`;
@@ -683,10 +683,7 @@ $('clearOrder').addEventListener('click', ()=>{
 });
 $('copyOrder').addEventListener('click', ()=>{
   const rows = Object.entries(cart); if (!rows.length) return toast('Order is empty');
-  const lines = ["Benny's — Order", ''];
-  rows.forEach(([n,c])=>lines.push(`${c.qty}x ${n} (${money(c.unit)} each) = ${money(c.qty*c.unit)}`));
-  lines.push('', `Total: ${$('orderTotal').textContent}`);
-  copyText(lines.join('\n'), 'Receipt copied');
+  copyText(rows.map(([n,c])=>c.qty === 1 ? n : `${c.qty}x ${n}`).join(', '), 'Receipt copied');
 });
 
 // ---- pages: menu is the landing page; #calc and #checkout open the others --
