@@ -112,6 +112,40 @@
   .search input:focus{outline:none;border-color:var(--cyan);box-shadow:4px 4px 0 var(--pink);transform:translate(-2px,-2px)}
   .none{text-align:center;color:var(--dim);font-family:var(--tag);font-size:20px;margin:6px 0 30px}
 
+  /* menu items are tap-to-add buttons */
+  button.item{width:100%;background:none;border:0;font:inherit;color:inherit;text-align:left;cursor:pointer;transition:background .12s}
+  button.item:hover{background:var(--panel2)}
+  button.item:active{background:var(--line)}
+  .incart{font-family:var(--num);font-size:16px;letter-spacing:.03em;background:var(--c);color:#111;border-radius:6px;padding:0 6px;margin-left:8px}
+  .badge{font-family:var(--sans);font-size:12px;font-weight:800;background:var(--pink);color:#fff;border-radius:999px;padding:1px 7px;margin-left:6px;vertical-align:2px}
+  .note a.link{color:var(--cyan)}
+
+  /* checkout */
+  .order{padding:4px 0}
+  .row{display:flex;align-items:center;gap:12px;padding:12px 16px;flex-wrap:wrap}
+  .row+.row{border-top:1px solid var(--line-soft)}
+  .row-name{flex:1;min-width:190px}
+  .row-name b{display:block;font-size:16px}
+  .row-name small{display:block;color:var(--faint);font-size:12px;font-weight:600}
+  .unit{display:block;color:var(--dim);font-size:13px;font-weight:600;margin-top:3px}
+  .unit small{display:inline;margin-left:4px}
+  .order input[type=number]{font-size:20px;width:64px;padding:1px 6px;border-radius:6px;text-align:center}
+  .unit input[type=number]{width:96px;font-size:18px;color:var(--ink)}
+  .qty{display:flex;align-items:center;gap:5px}
+  .qty .btn{width:34px;padding:5px 0;font-size:16px}
+  .line{font-family:var(--num);font-size:26px;letter-spacing:.03em;color:var(--yellow);min-width:110px;text-align:right}
+  .order-total{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 16px;border-top:2px dashed var(--line);font-family:var(--tag);font-size:22px}
+  #orderTotal{font-family:var(--num);font-size:46px;letter-spacing:.03em;color:var(--green);line-height:1}
+  .order-empty{padding:28px;text-align:center;color:var(--dim)}
+  .order-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:14px}
+  .cartbar{
+    position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:20;display:flex;gap:14px;align-items:center;
+    background:var(--yellow);color:#111;text-decoration:none;font-weight:700;padding:9px 22px;border-radius:999px;
+    box-shadow:4px 4px 0 var(--pink);white-space:nowrap;transition:transform .16s cubic-bezier(.3,1.6,.5,1);
+  }
+  .cartbar:hover{transform:translateX(-50%) translateY(-3px)}
+  .cartbar b{font-family:var(--num);font-size:24px;letter-spacing:.03em;font-weight:400}
+
   /* ---------- calculator ---------- */
   .tabs{display:flex;gap:4px;background:var(--panel);border:2px solid var(--line);border-radius:var(--r);
     padding:4px;width:fit-content;max-width:100%;margin:0 auto 12px;flex-wrap:wrap;justify-content:center}
@@ -221,11 +255,12 @@
   <nav aria-label="Pages">
     <a href="#menu">Price Menu</a>
     <a href="#calc">Calculator</a>
+    <a href="#checkout">Checkout<span class="badge" id="cartBadge" hidden></span></a>
   </nav>
 
   <!-- ===================== PRICE MENU ===================== -->
   <section id="menu">
-    <p class="note">Employee price sheet. <b>Charge these prices per item.</b></p>
+    <p class="note">Employee price sheet. <b>Charge these prices per item.</b> Tap an item to add it to an order.</p>
     <div class="search">
       <input id="search" type="search" placeholder="Search prices… turbo, S5, V12" aria-label="Search prices" autocomplete="off">
     </div>
@@ -279,11 +314,26 @@
     </table>
   </section>
 
+  <!-- ===================== CHECKOUT ===================== -->
+  <section id="checkout" hidden>
+    <p class="note">Tap items on the <a href="#menu" class="link">Price Menu</a> to add them. Change amounts here, then charge the total.</p>
+    <div class="card order">
+      <div id="orderRows"></div>
+      <div class="order-empty" id="orderEmpty">No items in this order yet.</div>
+      <div class="order-total"><span>Total to charge</span><span id="orderTotal">$0</span></div>
+    </div>
+    <div class="order-actions">
+      <button class="btn" id="copyOrder">Copy Receipt</button>
+      <button class="btn" id="clearOrder">Clear Order</button>
+    </div>
+  </section>
+
   <footer>Benny's Original Motor Works
     <div style="margin-top:4px">made by <b>Jack G.</b></div>
   </footer>
 </div>
 <div class="toast" id="toast" role="status"></div>
+<a href="#checkout" class="cartbar link" id="cartBar" hidden><span id="cartBarCount"></span><b id="cartBarTotal"></b><span>Checkout →</span></a>
 
 <script>
 // ---- price menu (edit prices here; [min, max] = price range) -----------
@@ -409,8 +459,8 @@ $('menuGrid').innerHTML = MENU.map(c=>{
     if (i.section){ sec = i.section; return `<div class="subhead" data-sec="${sec}">${sec}</div>`; }
     // search text: card + section + name + note + price, so "stage 5", "engines" or "50,000" all work
     const key = `${c.title} ${sec} ${i.name} ${i.sub||''} ${priceText(i.price)}`.toLowerCase();
-    return `<div class="item" data-sec="${sec}" data-key="${key}"><span class="name">${i.name}${i.sub?`<span class="sub">${i.sub}</span>`:''}</span>
-    <span class="lead"></span><span class="price">${priceText(i.price)}</span></div>`;
+    return `<button class="item" data-add="${i.name}" data-sec="${sec}" data-key="${key}"><span class="name">${i.name}<span class="incart" hidden></span>${i.sub?`<span class="sub">${i.sub}</span>`:''}</span>
+    <span class="lead"></span><span class="price">${priceText(i.price)}</span></button>`;
   }).join('')}
   </div>`;
 }).join('');
@@ -539,29 +589,124 @@ $('copyList').addEventListener('click', async ()=>{
     lines.push('', 'Per bench:');
     C.groups.forEach(g=>lines.push(`${g.name}: ` + Object.entries(g.mats).map(([m,q])=>`${q*per} ${m}`).join(' + ')));
   }
-  const text = lines.join('\n');
+  copyText(lines.join('\n'), 'Material list copied');
+});
+
+async function copyText(text, msg){
   try{ await navigator.clipboard.writeText(text); }
   catch(e){
     const ta = document.createElement('textarea'); ta.value = text;
     document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
   }
-  toast('Material list copied');
+  toast(msg);
+}
+
+// ---- checkout ----------------------------------------------------------
+// every menu item by name, with where it sits on the menu (shown under the name)
+const ITEMS = {};
+MENU.forEach(c=>{
+  let sec = '';
+  c.items.forEach(i=>{ if (i.section) sec = i.section; else ITEMS[i.name] = {price:i.price, where:[c.title, sec].filter(Boolean).join(' · ')}; });
+});
+const cart = store.get('bennys-cart') || {};                  // name -> {qty, unit}
+for (const n in cart) if (!ITEMS[n]) delete cart[n];          // drop items no longer on the menu
+const lowPrice = p => Array.isArray(p) ? p[0] : p;
+let page = 'menu';
+
+$('menuGrid').addEventListener('click', e=>{
+  const it = e.target.closest('[data-add]'); if (!it) return;
+  const name = it.dataset.add;
+  (cart[name] ||= {qty:0, unit:lowPrice(ITEMS[name].price)}).qty++;
+  renderCart();
 });
 
-// ---- pages: menu is the landing page, #calc opens the calculator -------
-function show(page){
-  $('menu').hidden = page !== 'menu';
-  $('calc').hidden = page !== 'calc';
-  document.querySelectorAll('nav a').forEach(a=>
-    a.setAttribute('aria-current', a.getAttribute('href') === '#'+page ? 'page' : 'false'));
+function renderCart(){
+  $('orderRows').innerHTML = Object.entries(cart).map(([n,c])=>{
+    const p = ITEMS[n].price;
+    // range-priced items (Chips, Red Bins) let you set the price you're charging
+    const unit = Array.isArray(p)
+      ? `<label class="unit">$<input type="number" data-unit="${n}" min="${p[0]}" max="${p[1]}" step="1" value="${c.unit}" aria-label="${n} price each"> each <small>${priceText(p)}</small></label>`
+      : `<span class="unit">${money(p)} each</span>`;
+    return `<div class="row">
+      <div class="row-name"><b>${n}</b><small>${ITEMS[n].where}</small>${unit}</div>
+      <div class="qty"><button class="btn" data-dec="${n}" aria-label="One less ${n}">−</button><input type="number" min="1" step="1" data-qty="${n}" value="${c.qty}" aria-label="${n} quantity"><button class="btn" data-inc="${n}" aria-label="One more ${n}">+</button></div>
+      <div class="line" data-line="${n}"></div>
+      <button class="btn small" data-del="${n}" aria-label="Remove ${n}">✕</button>
+    </div>`;
+  }).join('');
+  refreshTotals();
 }
-document.querySelectorAll('nav a').forEach(a=>a.addEventListener('click', e=>{
+
+// update numbers without rebuilding rows (keeps typing focus in inputs)
+function refreshTotals(){
+  let total = 0, count = 0;
+  for (const [n,c] of Object.entries(cart)){
+    const line = c.qty * c.unit; total += line; count += c.qty;
+    const el = document.querySelector(`[data-line="${CSS.escape(n)}"]`); if (el) el.textContent = money(line);
+  }
+  $('orderTotal').textContent = money(total);
+  $('orderEmpty').hidden = count > 0;
+  $('cartBadge').hidden = !count; $('cartBadge').textContent = count;
+  $('cartBar').hidden = !count || page !== 'menu';
+  $('cartBarCount').textContent = `${count} item${count===1?'':'s'}`;
+  $('cartBarTotal').textContent = money(total);
+  document.querySelectorAll('#menuGrid [data-add]').forEach(it=>{
+    const q = cart[it.dataset.add]?.qty || 0, chip = it.querySelector('.incart');
+    chip.hidden = !q; chip.textContent = '×' + q;
+  });
+  store.set('bennys-cart', cart);
+}
+
+$('orderRows').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if (!b) return;
+  const {inc, dec, del} = b.dataset;
+  if (inc) cart[inc].qty++;
+  if (dec && --cart[dec].qty < 1) delete cart[dec];
+  if (del) delete cart[del];
+  renderCart();
+});
+$('orderRows').addEventListener('input', e=>{
+  const {qty, unit} = e.target.dataset, v = Math.floor(Number(e.target.value)) || 0;
+  if (qty) cart[qty].qty = Math.max(0, v);
+  if (unit){ const [lo, hi] = ITEMS[unit].price; cart[unit].unit = Math.min(hi, Math.max(lo, v)); }
+  refreshTotals();
+});
+// when an input is left: clean up typed values (qty 0 removes the item, price snaps into its range)
+$('orderRows').addEventListener('change', e=>{
+  const {qty} = e.target.dataset;
+  if (qty && cart[qty].qty < 1) delete cart[qty];
+  renderCart();
+});
+$('clearOrder').addEventListener('click', ()=>{
+  for (const n in cart) delete cart[n];
+  renderCart();
+});
+$('copyOrder').addEventListener('click', ()=>{
+  const rows = Object.entries(cart); if (!rows.length) return toast('Order is empty');
+  const lines = ["Benny's — Order", ''];
+  rows.forEach(([n,c])=>lines.push(`${c.qty}x ${n} (${money(c.unit)} each) = ${money(c.qty*c.unit)}`));
+  lines.push('', `Total: ${$('orderTotal').textContent}`);
+  copyText(lines.join('\n'), 'Receipt copied');
+});
+
+// ---- pages: menu is the landing page; #calc and #checkout open the others --
+const PAGES = ['menu','calc','checkout'];
+function show(p){
+  page = p;
+  PAGES.forEach(id=>$(id).hidden = id !== p);
+  document.querySelectorAll('nav a').forEach(a=>
+    a.setAttribute('aria-current', a.getAttribute('href') === '#'+p ? 'page' : 'false'));
+  refreshTotals();
+}
+document.querySelectorAll('nav a, a.link').forEach(a=>a.addEventListener('click', e=>{
   e.preventDefault();
-  const page = a.getAttribute('href').slice(1);
-  show(page);
-  try{ history.replaceState(null, '', '#'+page); }catch(err){}   // keeps the link shareable where supported
+  const p = a.getAttribute('href').slice(1);
+  show(p);
+  scrollTo(0, 0);
+  try{ history.replaceState(null, '', '#'+p); }catch(err){}   // keeps the link shareable where supported
 }));
-show(location.hash === '#calc' ? 'calc' : 'menu');
+renderCart();
+show(PAGES.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'menu');
 sync();</script>
 </body>
 </html>
