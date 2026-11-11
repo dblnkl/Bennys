@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Benny's</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔧</text></svg>">
+<meta name="description" content="Benny's Original Motor Works — employee price menu and crafting calculator.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik+Wet+Paint&family=Permanent+Marker&family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0f0d15;
+    --panel:#1a1722;
+    --panel2:#24202e;
+    --line:#363142;
+    --line-soft:#2a2634;
+    --ink:#f5f2fa;
+    --dim:#aaa3ba;
+    --faint:#6f6981;
+    --pink:#ff2e9a;
+    --cyan:#1fd6e8;
+    --yellow:#ffd60a;
+    --purple:#9b5cff;
+    --orange:#ff7b1c;
+    --green:#3ee08a;
+    --r:12px;
+    --sans:'Barlow',system-ui,sans-serif;
+    --num:'Bebas Neue',Impact,sans-serif;
+    --tag:'Permanent Marker',cursive;
+    --drip:'Rubik Wet Paint',var(--tag);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  [hidden]{display:none!important}
+  html{color-scheme:dark}
+  body{
+    background:
+      radial-gradient(600px 400px at 6% 4%, rgba(255,46,154,.17), transparent 70%),
+      radial-gradient(520px 380px at 96% 10%, rgba(31,214,232,.15), transparent 70%),
+      radial-gradient(700px 500px at 82% 88%, rgba(155,92,255,.15), transparent 70%),
+      radial-gradient(500px 400px at 8% 92%, rgba(255,214,10,.08), transparent 70%),
+      var(--bg);
+    background-attachment:fixed;
+    color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5;font-weight:500;
+    min-height:100vh;padding:20px 16px 90px;overflow-x:hidden;
+  }
+  .wrap{max-width:900px;margin:0 auto}
+
+  /* ---------- header: graffiti tag + paint shards ---------- */
+  header{position:relative;text-align:center;padding:18px 0 6px}
+  .shard{position:absolute;display:block;pointer-events:none;opacity:.9}
+  .s1{width:120px;height:70px;left:2%;top:8px;background:var(--cyan);clip-path:polygon(0 20%,100% 0,35% 100%);transform:rotate(-8deg)}
+  .s2{width:90px;height:60px;right:4%;top:0;background:var(--pink);clip-path:polygon(10% 0,100% 55%,0 100%)}
+  .s3{width:70px;height:40px;left:16%;bottom:6px;background:var(--yellow);clip-path:polygon(0 0,100% 40%,30% 100%)}
+  .s4{width:110px;height:50px;right:14%;bottom:0;background:var(--purple);clip-path:polygon(0 60%,100% 0,70% 100%)}
+  h1{
+    position:relative;font-family:var(--drip);font-weight:400;
+    font-size:clamp(60px,15vw,112px);line-height:1;letter-spacing:.02em;
+    background:linear-gradient(95deg,var(--pink) 10%,var(--yellow) 45%,var(--cyan) 85%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(4px 5px 0 #000);
+  }
+  .tag{
+    position:relative;display:inline-block;font-family:var(--tag);font-size:18px;
+    background:var(--ink);color:var(--bg);padding:2px 14px;margin-top:4px;transform:rotate(-2deg);
+    box-shadow:4px 4px 0 var(--pink);
+  }
+  .drip{
+    height:38px;margin:18px -16px 0;
+    background:linear-gradient(90deg,var(--pink),var(--purple) 35%,var(--cyan) 65%,var(--yellow));
+    -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='38'%3E%3Crect width='220' height='8'/%3E%3Crect x='16' width='10' height='24' rx='5'/%3E%3Ccircle cx='21' cy='32' r='3'/%3E%3Crect x='62' width='7' height='14' rx='3.5'/%3E%3Crect x='104' width='12' height='31' rx='6'/%3E%3Crect x='150' width='6' height='12' rx='3'/%3E%3Crect x='186' width='9' height='20' rx='4.5'/%3E%3Ccircle cx='190.5' cy='28' r='2.5'/%3E%3C/svg%3E") repeat-x;
+            mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='38'%3E%3Crect width='220' height='8'/%3E%3Crect x='16' width='10' height='24' rx='5'/%3E%3Ccircle cx='21' cy='32' r='3'/%3E%3Crect x='62' width='7' height='14' rx='3.5'/%3E%3Crect x='104' width='12' height='31' rx='6'/%3E%3Crect x='150' width='6' height='12' rx='3'/%3E%3Crect x='186' width='9' height='20' rx='4.5'/%3E%3Ccircle cx='190.5' cy='28' r='2.5'/%3E%3C/svg%3E") repeat-x;
+  }
+
+  /* ---------- page nav ---------- */
+  nav{display:flex;justify-content:center;gap:14px;margin:10px 0 26px;flex-wrap:wrap}
+  nav a{
+    font-family:var(--tag);font-size:20px;text-decoration:none;color:var(--dim);
+    background:var(--panel);border:2px solid var(--line);border-radius:10px;padding:7px 22px;
+    transition:transform .12s;
+  }
+  nav a:hover{color:var(--ink);border-color:var(--ink)}
+  nav a[aria-current="page"]{background:var(--yellow);color:#111;border-color:#111;box-shadow:4px 4px 0 var(--pink);transform:rotate(-2deg)}
+  a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--yellow);outline-offset:2px}
+
+  .note{color:var(--dim);font-size:14.5px;text-align:center;max-width:62ch;margin:0 auto 18px}
+  .note b{color:var(--ink)}
+
+  /* ---------- price menu ---------- */
+  .menu{columns:2 320px;column-gap:22px}
+  .cat{background:var(--panel);border:2px solid var(--c);border-radius:var(--r);box-shadow:6px 6px 0 var(--c);overflow:hidden;padding-bottom:8px;break-inside:avoid;margin-bottom:22px}
+  .cat h3{
+    font-family:var(--tag);font-weight:400;font-size:24px;color:#111;background:var(--c);
+    padding:6px 18px 4px;margin-bottom:6px;clip-path:polygon(0 0,100% 0,94% 100%,0 100%);width:85%;
+  }
+  .subhead{font-family:var(--tag);font-size:17px;color:var(--c);margin:10px 18px 2px;padding-bottom:3px;border-bottom:2px solid var(--line)}
+  .subhead:first-of-type{margin-top:2px}
+  .item{display:flex;align-items:baseline;gap:8px;padding:7px 18px}
+  .item .name{font-weight:700;font-size:16px}
+  .item .sub{display:block;font-size:12px;color:var(--faint);font-weight:600}
+  .item .lead{flex:1;border-bottom:2px dotted var(--line);transform:translateY(-4px);min-width:16px}
+  .item .price{font-family:var(--num);font-size:26px;letter-spacing:.03em;color:var(--c);white-space:nowrap}
+
+  .search{max-width:460px;margin:0 auto 24px}
+  .search input{
+    width:100%;background:var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' fill='none' stroke='%23aaa3ba' stroke-width='2.5' stroke-linecap='round'%3E%3Ccircle cx='7.5' cy='7.5' r='5.5'/%3E%3Cpath d='M12 12l4.5 4.5'/%3E%3C/svg%3E") no-repeat 17px center;
+    border:2px solid var(--line);border-radius:999px;color:var(--ink);font:600 15px var(--sans);
+    padding:10px 18px 10px 46px;transition:border-color .14s,box-shadow .14s,transform .16s cubic-bezier(.3,1.6,.5,1);
+  }
+  .search input::placeholder{color:var(--faint)}
+  .search input:focus{outline:none;border-color:var(--cyan);box-shadow:4px 4px 0 var(--pink);transform:translate(-2px,-2px)}
+  .none{text-align:center;color:var(--dim);font-family:var(--tag);font-size:20px;margin:6px 0 30px}
+
+  /* ---------- calculator ---------- */
+  .tabs{display:flex;gap:4px;background:var(--panel);border:2px solid var(--line);border-radius:var(--r);
+    padding:4px;width:fit-content;max-width:100%;margin:0 auto 12px;flex-wrap:wrap;justify-content:center}
+  .tabs button{font-family:var(--num);font-size:20px;letter-spacing:.06em;color:var(--dim);
+    background:none;border:0;border-radius:8px;padding:6px 18px;cursor:pointer}
+  .tabs button:hover{color:var(--ink)}
+  .tabs button[aria-pressed="true"]{background:var(--pink);color:#fff}
+  .tabs.small button{font-size:16px;padding:4px 14px}
+  .tabs.small button[aria-pressed="true"]{background:var(--panel2);color:var(--cyan)}
+
+  .card{background:var(--panel);border:2px solid var(--line);border-radius:var(--r)}
+  .input-card{padding:16px 18px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;justify-content:center}
+  .input-card label{font-family:var(--num);font-size:19px;letter-spacing:.06em;color:var(--dim)}
+  input[type=number]{background:var(--bg);border:2px solid var(--line);border-radius:8px;color:var(--yellow);
+    font-family:var(--num);font-size:36px;letter-spacing:.04em;padding:0 14px;width:170px}
+  input[type=number]:focus{outline:none;border-color:var(--yellow)}
+  .steppers{display:flex;gap:6px;flex-wrap:wrap}
+  .btn.step{display:flex;flex-direction:column;align-items:center;line-height:1.15;min-width:72px}
+  .btn.step small{font-size:10.5px;font-weight:600;color:var(--dim);margin-top:2px}
+  .btn{font-family:var(--sans);font-size:13.5px;font-weight:700;background:var(--panel2);border:2px solid var(--line);
+    color:var(--ink);border-radius:8px;padding:6px 13px;cursor:pointer}
+  .btn:hover{border-color:var(--pink);color:var(--pink)}
+  .btn.small{padding:3px 11px;font-size:12.5px}
+
+  .summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:16px 0 6px}
+  .stat{background:var(--panel);border:2px solid var(--c);border-radius:var(--r);padding:10px 14px;box-shadow:4px 4px 0 var(--c)}
+  .stat .k{font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.12em}
+  .stat .v{font-family:var(--num);font-size:36px;line-height:1.1;letter-spacing:.03em;color:var(--c)}
+  .hint{color:var(--dim);font-size:14px;margin:12px 4px 0;min-height:1.5em;text-align:center}
+  .hint.ok{color:var(--green);font-weight:700}
+
+  .section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:30px 0 12px;flex-wrap:wrap}
+  h2{font-family:var(--tag);font-weight:400;font-size:26px}
+  .section-head .meta{font-size:13px;color:var(--dim);display:flex;align-items:center;gap:8px}
+
+  .benches{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,210px),1fr));gap:10px}
+  .bench{background:var(--panel);border:2px solid var(--line);border-radius:var(--r);padding:11px 13px;cursor:pointer;
+    text-align:left;font:inherit;color:inherit;transition:border-color .12s,opacity .12s}
+  .bench:hover{border-color:var(--cyan)}
+  .bench .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px}
+  .bench .name{font-family:var(--num);font-size:22px;letter-spacing:.05em}
+  .bench .tick{width:24px;height:24px;border-radius:6px;border:2px solid var(--line);display:grid;place-items:center;
+    color:transparent;font-weight:700;flex-shrink:0}
+  .bench[aria-pressed="true"]{opacity:.5}
+  .bench[aria-pressed="true"] .tick{background:var(--green);border-color:var(--green);color:#111}
+  .bench[aria-pressed="true"] .tick::after{content:'✓'}
+  .bench[aria-pressed="true"] .name{text-decoration:line-through;text-decoration-color:var(--pink)}
+  .mat{display:flex;justify-content:space-between;align-items:center;background:var(--panel2);border-radius:6px;
+    padding:4px 10px;margin-top:5px;font-size:13.5px}
+  .mat .lbl{display:flex;align-items:center;gap:8px;color:var(--dim);font-weight:600}
+  .chip{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+  .mat .n{font-family:var(--num);font-size:19px;letter-spacing:.03em}
+
+  .banner{display:none;margin:14px 0 0;padding:14px;text-align:center;background:var(--panel);
+    border:2px dashed var(--green);border-radius:var(--r)}
+  .banner.show{display:block}
+  .banner .big{font-family:var(--tag);font-size:26px;color:var(--green)}
+  .banner .small{font-size:13px;color:var(--dim)}
+
+  table{width:100%;border-collapse:separate;border-spacing:0;background:var(--panel);border:2px solid var(--line);
+    border-radius:var(--r);overflow:hidden}
+  th,td{padding:8px 14px;text-align:left;font-size:14px}
+  th{background:var(--panel2);color:var(--faint);text-transform:uppercase;font-size:11px;letter-spacing:.12em;font-weight:700}
+  td .lbl{display:flex;align-items:center;gap:9px;font-weight:600}
+  td.num{font-family:var(--num);font-size:22px;letter-spacing:.03em;text-align:right}
+  td.pct{color:var(--faint);font-size:12px;text-align:right;width:60px;font-weight:700}
+  tr+tr td{border-top:1px solid var(--line-soft)}
+  tr.total td{background:var(--panel2);color:var(--yellow);font-weight:700}
+  .bar{height:4px;border-radius:2px;margin-top:5px;background:var(--line-soft);overflow:hidden}
+  .bar i{display:block;height:100%}
+
+  footer{margin-top:40px;color:var(--faint);font-size:12.5px;text-align:center;font-weight:600}
+  footer b{color:var(--pink)}
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(8px);background:var(--yellow);color:#111;
+    border-radius:8px;padding:9px 18px;font-weight:700;font-size:14px;opacity:0;pointer-events:none;transition:opacity .15s,transform .15s;
+    box-shadow:4px 4px 0 var(--pink)}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  /* ---------- button animations ---------- */
+  .btn,.tabs button,nav a,.bench{
+    transition:transform .16s cubic-bezier(.3,1.6,.5,1),box-shadow .16s,background .14s,color .14s,border-color .14s,opacity .12s;
+  }
+  .btn:hover,.tabs button:hover,.bench:hover{transform:translate(-2px,-2px);box-shadow:3px 3px 0 var(--pink)}
+  nav a:hover{transform:translate(-2px,-2px) rotate(-2deg);box-shadow:4px 4px 0 var(--cyan)}
+  nav a[aria-current="page"]:hover{animation:wiggle .45s ease-in-out}
+  .btn:active,.tabs button:active,nav a:active,.bench:active{
+    transform:translate(2px,2px) scale(.95);box-shadow:0 0 0 transparent;transition-duration:.05s;
+  }
+  .tabs button[aria-pressed="true"],.bench[aria-pressed="true"] .tick{animation:pop .35s cubic-bezier(.3,1.6,.5,1)}
+  nav a[aria-current="page"]{animation:popTilt .35s cubic-bezier(.3,1.6,.5,1)}
+  @keyframes pop{0%{transform:scale(.8)}100%{transform:scale(1)}}
+  @keyframes popTilt{0%{transform:scale(.8) rotate(4deg)}100%{transform:scale(1) rotate(-2deg)}}
+  @keyframes wiggle{0%,100%{transform:rotate(-2deg)}25%{transform:rotate(3deg)}50%{transform:rotate(-5deg)}75%{transform:rotate(2deg)}}
+
+  @media (max-width:520px){.shard{transform:scale(.6)}}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <i class="shard s1"></i><i class="shard s2"></i><i class="shard s3"></i><i class="shard s4"></i>
+    <h1>Benny's</h1>
+    <div class="tag">Original Motor Works</div>
+  </header>
+  <div class="drip" aria-hidden="true"></div>
+
+  <nav aria-label="Pages">
+    <a href="#menu">Price Menu</a>
+    <a href="#calc">Calculator</a>
+  </nav>
+
+  <!-- ===================== PRICE MENU ===================== -->
+  <section id="menu">
+    <p class="note">Employee price sheet. <b>Charge these prices per item.</b></p>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search prices… turbo, S5, V12" aria-label="Search prices" autocomplete="off">
+    </div>
+    <p class="none" id="noMatch" hidden>Nothing on the menu matches that.</p>
+    <div class="menu" id="menuGrid"></div>
+  </section>
+
+  <!-- ===================== CALCULATOR ===================== -->
+  <section id="calc" hidden>
+    <div class="tabs" id="calcTabs" role="group" aria-label="Calculator"></div>
+    <p class="note" id="note"></p>
+
+    <div class="tabs small" role="group" aria-label="Calculation mode">
+      <button id="modeBins" aria-pressed="true">Blue Bins</button>
+      <button id="modeQty" aria-pressed="false"></button>
+    </div>
+    <div class="card input-card">
+      <label for="amount" id="amountLabel">Blue bins</label>
+      <input id="amount" type="number" min="0" step="1" inputmode="numeric">
+      <div class="steppers" id="steppers"></div>
+    </div>
+
+    <div class="summary">
+      <div class="stat" style="--c:var(--cyan)"><div class="k" id="k1"></div><div class="v" id="v1"></div></div>
+      <div class="stat" style="--c:var(--pink)"><div class="k">Bins needed</div><div class="v" id="used"></div></div>
+      <div class="stat" style="--c:var(--orange)"><div class="k">Bins left over</div><div class="v" id="left"></div></div>
+      <div class="stat" style="--c:var(--purple)"><div class="k" id="k4"></div><div class="v" id="v4"></div></div>
+      <div class="stat" style="--c:var(--green)"><div class="k">Sells for</div><div class="v" id="sale"></div></div>
+    </div>
+    <p class="hint" id="hint"></p>
+
+    <div id="benchSection">
+      <div class="section-head">
+        <h2>Bench Loadout</h2>
+        <span class="meta"><span id="loadedCount">0</span>/10 loaded · tap to check off <button class="btn small" id="resetLoaded">Reset</button></span>
+      </div>
+      <div class="benches" id="benches"></div>
+      <div class="banner" id="banner">
+        <div class="big">All benches loaded!</div>
+        <div class="small">Every station is stocked. Get to work.</div>
+      </div>
+    </div>
+
+    <div class="section-head">
+      <h2>Material List</h2>
+      <button class="btn small" id="copyList">Copy List</button>
+    </div>
+    <table>
+      <thead><tr><th>Material</th><th style="text-align:right">Blue bins</th><th style="text-align:right">Share</th></tr></thead>
+      <tbody id="shopping"></tbody>
+    </table>
+  </section>
+
+  <footer>Benny's Original Motor Works
+    <div style="margin-top:4px">made by <b>Jack G.</b></div>
+  </footer>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+// ---- price menu (edit prices here; [min, max] = price range) -----------
+const MENU = [
+  {title:'Performance', color:'var(--yellow)', items:[
+    {section:'Stage 5'},
+    {name:'S5 Brakes',      price:50000},
+    {name:'S5 Clutch Plate',      price:50000},
+    {name:'S5 Dampeners',   price:25000},
+    {name:'S5 Coilovers',       price:30000},
+    {name:'S5 Dump Valve',  price:15000},
+    {name:'S5 Weight Reduction', price:30000},
+    {name:'S5 Anti Swaybar', price:10000},
+    {section:'Stage 4'},
+    {name:'S4 Brakes',      price:10000},
+    {name:'S4 Clutch Plate',      price:10000},
+    {name:'S4 Dampeners',   price:10000},
+    {name:'S4 Coilovers',       price:10000},
+    {name:'S4 Dump Valve',  price:10000},
+    {name:'S4 Weight Reduction', price:10000},
+    {name:'S4 Anti Swaybar', price:10000},
+    {section:'Turbos'},
+    {name:'100mm Turbo',    price:20000},
+    {name:'96mm Turbo',     price:15000},
+    {name:'Other Sizes',    price:10000},
+  ]},
+  {title:'Materials', color:'var(--cyan)', items:[
+    {name:'Red Bins',  price:[80,100]},
+  ]},
+  {title:'Crafted', color:'var(--pink)', items:[
+    {name:'Across',         price:2000, sub:'1 of every part'},
+    {name:'Lockpick',       price:2000},
+    {name:'Adv Repair Kit', price:2500},
+    {name:'Harness',        price:4000},
+    {name:'Chips',          price:[20000,25000]},
+  ]},
+  {title:'Engines', color:'var(--orange)', items:[
+    {section:'Blocks'},
+    {name:'3.8 Twin Turbo V6', price:300000},
+    {name:'JC SHRT VT EYE',       price:300000},
+    {name:'5.0 Yote',          price:250000},
+    {name:'JC E6',             price:250000},
+    {name:'6.5L V12',          price:150000},
+    {name:'8.0L W16',               price:150000},
+    {section:'Internals'},
+    {name:'Piston/Rods',       price:8000, sub:'each'},
+  ]},
+  {title:'Tires', color:'var(--purple)', items:[
+    {name:'Slicks',         price:20000},
+    {name:'Slick Set',      price:80000},
+    {name:'Semi-Slick',     price:10000},
+    {name:'Semi-Slick Set', price:40000},
+  ]},
+];
+const money = n => '$' + n.toLocaleString('en-US');
+const priceText = p => Array.isArray(p) ? `${money(p[0])} – ${money(p[1])}` : money(p);
+const priceOf = name => MENU.flatMap(c=>c.items).find(i=>i.name===name).price;
+
+// ---- recipes (materials per ONE unit; 1 blue bin = 1 material) ----------
+const CALCS = {
+  parts: {
+    tab:'Parts', unit:'across', qtyLabel:'Parts per bench', menuName:'Across',
+    note:'<b>1 blue bin = 1 material.</b> Every part costs 14 materials, so one of every part (a full across) is <b>140 bins</b>.',
+    groups:[
+      {name:'Brakes',        mats:{'Refined Rubber':14}},
+      {name:'Axels',         mats:{'Steel Tube':14}},
+      {name:'Radiator',      mats:{'Copper Sheeting':14}},
+      {name:'Clutch',        mats:{'Steel Tube':7,'Circuit Board':7}},
+      {name:'Transmission',  mats:{'Steel Tube':7,'Recyclable Plastic':7}},
+      {name:'Electronics',   mats:{'Circuit Board':14}},
+      {name:'Fuel Injectors',mats:{'Metal Offcuts':14}},
+      {name:'Tires',         mats:{'Refined Rubber':14}},
+      {name:'Body',          mats:{'Tempered Glass':7,'Recyclable Plastic':7}},
+      {name:'Engine',        mats:{'Steel Tube':7,'Alloy Tube':7}},
+    ],
+  },
+  lockpick: {
+    tab:'Lockpicks', unit:'lockpick', qtyLabel:'Lockpicks', menuName:'Lockpick',
+    note:'Each lockpick costs <b>100 Steel Tube + 10 Alloy Tube</b> (110 bins).',
+    groups:[{name:'Lockpick', mats:{'Steel Tube':100,'Alloy Tube':10}}],
+  },
+  kit: {
+    tab:'Adv Repair Kits', unit:'kit', qtyLabel:'Repair kits', menuName:'Adv Repair Kit',
+    note:'Each advanced repair kit costs <b>21 each</b> of Alloy Tube, Recyclable Plastic, Copper Sheeting, Circuit Board, Refined Rubber, Steel Tube and Tempered Glass (147 bins).',
+    groups:[{name:'Adv Repair Kit', mats:{'Alloy Tube':21,'Recyclable Plastic':21,'Copper Sheeting':21,'Circuit Board':21,'Refined Rubber':21,'Steel Tube':21,'Tempered Glass':21}}],
+  },
+};
+for (const c of Object.values(CALCS)){
+  c.cost  = c.groups.reduce((s,g)=>s+Object.values(g.mats).reduce((a,b)=>a+b,0),0);
+  c.price = priceOf(c.menuName);
+}
+
+const MAT_ORDER = ['Alloy Tube','Recyclable Plastic','Copper Sheeting','Circuit Board','Refined Rubber','Metal Offcuts','Steel Tube','Tempered Glass'];  // same order as in-game Material Trader
+const MAT_COLOR = {
+  'Steel Tube':'#6aa8e8','Alloy Tube':'#b394e8','Refined Rubber':'#8b8f99','Copper Sheeting':'#ff8a4c',
+  'Circuit Board':'#3ee08a','Recyclable Plastic':'#ffd60a','Metal Offcuts':'#a3adb8','Tempered Glass':'#1fd6e8'
+};
+
+// ---- helpers / state ---------------------------------------------------
+const $ = id => document.getElementById(id);
+const store = {
+  get(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } },
+  set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+const saved = store.get('bennys') || {};
+let calc = CALCS[saved.calc] ? saved.calc : 'parts';
+const state = saved.state || {};            // per calc: {mode, amount}
+const loaded = new Set();                   // checked-off benches (parts only)
+const cur = () => state[calc] ||= {mode:'bins', amount:CALCS[calc].cost};
+const val = () => Math.max(0, Math.floor(Number($('amount').value) || 0));
+
+let toastTimer;
+function toast(msg){
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+// ---- price menu --------------------------------------------------------
+$('menuGrid').innerHTML = MENU.map(c=>{
+  let sec = '';
+  return `<div class="cat" style="--c:${c.color}"><h3>${c.title}</h3>
+  ${c.items.map(i=>{
+    if (i.section){ sec = i.section; return `<div class="subhead" data-sec="${sec}">${sec}</div>`; }
+    // search text: card + section + name + note + price, so "stage 5", "engines" or "50,000" all work
+    const key = `${c.title} ${sec} ${i.name} ${i.sub||''} ${priceText(i.price)}`.toLowerCase();
+    return `<div class="item" data-sec="${sec}" data-key="${key}"><span class="name">${i.name}${i.sub?`<span class="sub">${i.sub}</span>`:''}</span>
+    <span class="lead"></span><span class="price">${priceText(i.price)}</span></div>`;
+  }).join('')}
+  </div>`;
+}).join('');
+
+// ---- price search ------------------------------------------------------
+function filterMenu(){
+  const words = $('search').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  let any = false;
+  document.querySelectorAll('#menuGrid .cat').forEach(cat=>{
+    let catAny = false;
+    cat.querySelectorAll('.item').forEach(it=>{
+      const hit = words.every(w=>it.dataset.key.includes(w));
+      it.hidden = !hit; catAny ||= hit;
+    });
+    cat.querySelectorAll('.subhead').forEach(h=>
+      h.hidden = !cat.querySelector(`.item[data-sec="${h.dataset.sec}"]:not([hidden])`));
+    cat.hidden = !catAny; any ||= catAny;
+  });
+  $('noMatch').hidden = any;
+}
+$('search').addEventListener('input', filterMenu);
+// press "/" anywhere on the menu to jump to search
+addEventListener('keydown', e=>{
+  if (e.key==='/' && !$('menu').hidden && document.activeElement.tagName!=='INPUT'){ e.preventDefault(); $('search').focus(); }
+});
+
+// ---- calculator --------------------------------------------------------
+function totals(){
+  const C = CALCS[calc], s = cur();
+  const per  = s.mode==='bins' ? Math.floor(s.amount / C.cost) : s.amount;
+  const used = per * C.cost;
+  const mats = {};
+  C.groups.forEach(g=>Object.entries(g.mats).forEach(([m,q])=>mats[m]=(mats[m]||0)+q*per));
+  return {C, s, per, used, left: s.mode==='bins' ? s.amount-used : 0, mats};
+}
+
+function sync(){
+  const C = CALCS[calc], s = cur();
+  $('calcTabs').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.c===calc));
+  $('note').innerHTML = C.note;
+  $('modeBins').setAttribute('aria-pressed', s.mode==='bins');
+  $('modeQty').setAttribute('aria-pressed', s.mode==='qty');
+  $('modeQty').textContent = C.qtyLabel;
+  $('amountLabel').textContent = s.mode==='bins' ? 'Blue bins' : C.qtyLabel;
+  $('amount').value = s.amount;
+  // each button shows its bin/qty change, with what it means underneath (e.g. "+1 kit")
+  const mult = s.mode==='bins' ? C.cost : 1;
+  const units = C.unit + (C.unit.endsWith('s') ? 'es' : 's');
+  $('steppers').innerHTML = [-5,-1,1,5].map(n=>{
+    const sign = n>0 ? '+' : '−', k = Math.abs(n);
+    return `<button class="btn step" data-d="${n*mult}">${sign}${k*mult}${s.mode==='bins' ? `<small>${sign}${k} ${k===1 ? C.unit : units}</small>` : ''}</button>`;
+  }).join('');
+  $('steppers').querySelectorAll('button').forEach(b=>b.addEventListener('click', ()=>{
+    $('amount').value = Math.max(0, val() + Number(b.dataset.d)); render();
+  }));
+  $('benchSection').hidden = C.groups.length < 2;
+  render();
+}
+
+function render(){
+  cur().amount = val();
+  const {C, s, per, used, left, mats} = totals();
+
+  $('k1').textContent = C.qtyLabel;
+  $('v1').textContent = per;
+  $('used').textContent = used;
+  $('left').textContent = left;
+  if (C.groups.length > 1){ $('k4').textContent = 'Total parts made'; $('v4').textContent = per * C.groups.length; }
+  else { $('k4').textContent = `Bins per ${C.unit}`; $('v4').textContent = C.cost; }
+  $('sale').textContent = money(per * C.price);
+
+  const hint = $('hint');
+  hint.className = 'hint';
+  if (s.mode==='bins'){
+    if (left > 0) hint.textContent = `${left} bin${left===1?'':'s'} left over. ${C.cost-left} more makes 1 more ${C.unit}.`;
+    else { hint.className = s.amount ? 'hint ok' : 'hint';
+           hint.textContent = s.amount ? 'Perfect fit. Every bin is used.' : 'Enter how many blue bins you have.'; }
+  } else hint.textContent = `Gather ${used} blue bins for ${per} ${C.qtyLabel.toLowerCase()}.`;
+
+  if (C.groups.length > 1){
+    $('benches').innerHTML = C.groups.map((g,i)=>`<button class="bench" data-i="${i}" aria-pressed="${loaded.has(i)}">
+      <span class="top"><span class="name">${g.name}</span><span class="tick" aria-hidden="true"></span></span>
+      ${Object.entries(g.mats).map(([m,q])=>`<div class="mat"><span class="lbl"><span class="chip" style="background:${MAT_COLOR[m]}"></span>${m}</span><span class="n">${q*per}</span></div>`).join('')}
+      </button>`).join('');
+    $('benches').querySelectorAll('.bench').forEach(el=>el.addEventListener('click', ()=>{
+      const i = Number(el.dataset.i);
+      loaded.has(i) ? loaded.delete(i) : loaded.add(i);
+      el.setAttribute('aria-pressed', loaded.has(i));
+      updateLoaded();
+    }));
+    updateLoaded();
+  }
+
+  $('shopping').innerHTML = MAT_ORDER.map(m=>{
+    const n = mats[m] || 0, pct = used ? Math.round(n/used*100) : 0;
+    return `<tr><td><span class="lbl"><span class="chip" style="background:${MAT_COLOR[m]}"></span>${m}</span>
+      <span class="bar"><i style="width:${pct}%;background:${MAT_COLOR[m]}"></i></span></td>
+      <td class="num">${n}</td><td class="pct">${pct}%</td></tr>`;
+  }).join('') + `<tr class="total"><td>Total bins</td><td class="num">${used}</td><td class="pct"></td></tr>`;
+
+  store.set('bennys', {calc, state});
+}
+function updateLoaded(){
+  $('loadedCount').textContent = loaded.size;
+  $('banner').classList.toggle('show', loaded.size === CALCS.parts.groups.length);
+}
+
+$('calcTabs').innerHTML = Object.entries(CALCS).map(([k,c])=>`<button data-c="${k}">${c.tab}</button>`).join('');
+$('calcTabs').querySelectorAll('button').forEach(b=>b.addEventListener('click', ()=>{ calc = b.dataset.c; sync(); }));
+
+function setMode(m){
+  const s = cur(); if (s.mode===m) return;
+  s.amount = m==='qty' ? Math.floor(val()/CALCS[calc].cost) : val()*CALCS[calc].cost;
+  s.mode = m; sync();
+}
+$('modeBins').addEventListener('click', ()=>setMode('bins'));
+$('modeQty').addEventListener('click', ()=>setMode('qty'));
+$('amount').addEventListener('input', render);
+$('resetLoaded').addEventListener('click', ()=>{ loaded.clear(); render(); });
+
+$('copyList').addEventListener('click', async ()=>{
+  const {C, per, used, mats} = totals();
+  const lines = [`Benny's — ${per} ${C.qtyLabel.toLowerCase()} (${used} bins, sells for ${money(per*C.price)})`, ''];
+  MAT_ORDER.filter(m=>m in mats).forEach(m=>lines.push(`${m}: ${mats[m]}`));
+  if (C.groups.length > 1){
+    lines.push('', 'Per bench:');
+    C.groups.forEach(g=>lines.push(`${g.name}: ` + Object.entries(g.mats).map(([m,q])=>`${q*per} ${m}`).join(' + ')));
+  }
+  const text = lines.join('\n');
+  try{ await navigator.clipboard.writeText(text); }
+  catch(e){
+    const ta = document.createElement('textarea'); ta.value = text;
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+  }
+  toast('Material list copied');
+});
+
+// ---- pages: menu is the landing page, #calc opens the calculator -------
+function show(page){
+  $('menu').hidden = page !== 'menu';
+  $('calc').hidden = page !== 'calc';
+  document.querySelectorAll('nav a').forEach(a=>
+    a.setAttribute('aria-current', a.getAttribute('href') === '#'+page ? 'page' : 'false'));
+}
+document.querySelectorAll('nav a').forEach(a=>a.addEventListener('click', e=>{
+  e.preventDefault();
+  const page = a.getAttribute('href').slice(1);
+  show(page);
+  try{ history.replaceState(null, '', '#'+page); }catch(err){}   // keeps the link shareable where supported
+}));
+show(location.hash === '#calc' ? 'calc' : 'menu');
+sync();</script>
+</body>
+</html>
