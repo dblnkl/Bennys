@@ -48,17 +48,38 @@ function setup() {
     sh.getRange('B2').setFormula(`=ARRAYFORMULA(IF(A2:A="",,SUMIFS(${v},${n},A2:A,${t},">="&${MONDAY})))`);
     sh.getRange('C2').setFormula(`=ARRAYFORMULA(IF(A2:A="",,SUMIFS(${v},${n},A2:A)))`);
     if (format) sh.getRange('B:C').setNumberFormat(format);
+    return sh;
+  };
+  // Benny's look: dark rows with light text, a graffiti-font header in the tab's neon color
+  const paint = (sh, accent, width) => {
+    const all = sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns());
+    all.setBackground('#0f0d15').setFontColor('#f5f2fa').setFontFamily('Arial').setFontSize(11).setVerticalAlignment('middle');
+    sh.getBandings().forEach(b => b.remove());
+    sh.getRange(1, 1, sh.getMaxRows(), width).applyRowBanding(SpreadsheetApp.BandingTheme.GREY, true, false)
+      .setHeaderRowColor('#000000').setFirstRowColor('#1a1722').setSecondRowColor('#24202e');
+    sh.getRange(1, 1, 1, width).setFontFamily('Permanent Marker').setFontSize(13).setFontColor(accent).setFontWeight('bold')
+      .setBorder(null, null, true, null, null, null, accent, SpreadsheetApp.BorderStyle.SOLID_THICK);
+    sh.setRowHeight(1, 36).setHiddenGridlines(true).setTabColor(accent);
+    for (let c = 1; c <= width; c++) if (sh.getColumnWidth(c) < 150) sh.setColumnWidth(c, 150);
   };
 
-  tab('Employees', ['Name', 'PIN']).getRange('B:B').setNumberFormat('@'); // text, so PINs like 0420 keep their 0
-  tab('Shifts', ['Name', 'Clock In', 'Clock Out', 'Hours']).getRange('B:C').setNumberFormat(DATE_FORMAT);
+  const emps = tab('Employees', ['Name', 'PIN']);
+  emps.getRange('B:B').setNumberFormat('@'); // text, so PINs like 0420 keep their 0
+  paint(emps, '#ff2e9a', 2);
+  const shifts = tab('Shifts', ['Name', 'Clock In', 'Clock Out', 'Hours']);
+  shifts.getRange('B:C').setNumberFormat(DATE_FORMAT);
+  paint(shifts, '#1fd6e8', 4);
+  shifts.setColumnWidths(2, 2, 210);
   const sales = tab('Sales', ['Time', 'Employee', 'Items', 'Total']);
   sales.getRange('A:A').setNumberFormat(DATE_FORMAT);
   sales.getRange('D:D').setNumberFormat('$#,##0');
-  sales.setColumnWidth(3, 420);
+  paint(sales, '#ff7b1c', 4);
+  sales.setColumnWidth(1, 210).setColumnWidth(3, 420);
+  sales.getRange('D2:D').setFontColor('#3ee08a').setFontWeight('bold');
 
-  totals('Hours', ['Employee', 'Hours this week (since Monday)', 'Hours all time'], 'Shifts', 'A', 'D', 'B');
-  totals('Sales Totals', ['Employee', 'Sales this week (since Monday)', 'Sales all time'], 'Sales', 'B', 'D', 'A', '$#,##0');
+  paint(totals('Hours', ['Employee', 'Hours this week (since Monday)', 'Hours all time'], 'Shifts', 'A', 'D', 'B'), '#ffd60a', 3);
+  paint(totals('Sales Totals', ['Employee', 'Sales this week (since Monday)', 'Sales all time'], 'Sales', 'B', 'D', 'A', '$#,##0'), '#9b5cff', 3);
+  ['Hours', 'Sales Totals'].forEach(n => ss.getSheetByName(n).setColumnWidths(2, 2, 260));
 
   const blank = ss.getSheetByName('Sheet1');
   if (blank && blank.getLastRow() === 0) ss.deleteSheet(blank);
