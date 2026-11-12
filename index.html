@@ -166,6 +166,9 @@
   #onShift .empty{color:var(--dim);font-weight:600}
   #onShift .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--green);margin-right:9px;box-shadow:0 0 8px var(--green)}
   #onShift .since{color:var(--dim);font-size:13px;font-weight:600}
+  .sale{margin-top:24px}
+  .sale-hint{color:var(--dim);font-size:13.5px;margin:-4px 0 12px}
+  .sale-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:0 14px}
 
   /* ---------- calculator ---------- */
   .tabs{display:flex;gap:4px;background:var(--panel);border:2px solid var(--line);border-radius:var(--r);
@@ -276,8 +279,8 @@
   <nav aria-label="Pages">
     <a href="#menu">Price Menu</a>
     <a href="#calc">Calculator</a>
-    <a href="#checkout">Checkout<span class="badge" id="cartBadge" hidden></span></a>
     <a href="#clock">Time Clock</a>
+    <a href="#checkout">Checkout<span class="badge" id="cartBadge" hidden></span></a>
   </nav>
 
   <!-- ===================== PRICE MENU ===================== -->
@@ -347,6 +350,16 @@
     <div class="order-actions">
       <button class="btn" id="copyOrder">Copy Receipt</button>
       <button class="btn" id="clearOrder">Clear Order</button>
+    </div>
+    <div class="card clock-card sale" style="--c:var(--green)">
+      <h2>Complete Sale</h2>
+      <p class="sale-hint">Saves this order to the sales sheet. Only employees who are punched in can complete a sale.</p>
+      <div class="sale-fields">
+        <label class="field">Employee<select id="saleName"></select></label>
+        <label class="field">PIN<input id="salePin" type="password" inputmode="numeric" autocomplete="off" maxlength="8"></label>
+      </div>
+      <button class="btn punch-btn" id="saleBtn" disabled>Complete Sale</button>
+      <p class="clock-msg" id="saleMsg" role="status"></p>
     </div>
   </section>
 
@@ -657,6 +670,7 @@ $('menuGrid').addEventListener('click', e=>{
   const it = e.target.closest('[data-add]'); if (!it) return;
   const name = it.dataset.add;
   (cart[name] ||= {qty:0, unit:lowPrice(ITEMS[name].price)}).qty++;
+  saleMsg('');   // a new order is starting, so drop the last "Sale saved" note
   renderCart();
 });
 
@@ -695,6 +709,7 @@ function refreshTotals(){
     chip.hidden = !q; chip.textContent = '×' + q;
   });
   store.set('bennys-cart', cart);
+  updateSaleBtn();
 }
 
 $('orderRows').addEventListener('click', e=>{
@@ -735,7 +750,9 @@ const since = ms => {
   const m = Math.max(0, Math.floor((Date.now()-ms)/60000));
   return m < 60 ? `${m}m` : `${Math.floor(m/60)}h ${m%60}m`;
 };
-function clockMsg(text, kind){ $('clockMsg').textContent = text; $('clockMsg').className = 'clock-msg ' + (kind||''); }
+function setMsg(id, text, kind){ $(id).textContent = text; $(id).className = 'clock-msg ' + (kind||''); }
+const clockMsg = (text, kind) => setMsg('clockMsg', text, kind);
+const saleMsg  = (text, kind) => setMsg('saleMsg', text, kind);
 
 async function clockCall(body){
   // text/plain keeps the request "simple", so Google's web app accepts it from this site
@@ -745,12 +762,18 @@ async function clockCall(body){
 async function loadClock(){
   if (!CLOCK_URL) return clockMsg("The time clock isn't connected yet.", 'err');
   try{ clock = await clockCall(); renderClock(); }
-  catch(e){ clockMsg("Can't reach the time clock. Check your connection.", 'err'); }
+  catch(e){ const t = "Can't reach the time clock. Check your connection."; clockMsg(t, 'err'); saleMsg(t, 'err'); }
+}
+function nameOptions(names, picked, blank){
+  return `<option value="">${blank}</option>` + names.map(n=>`<option${n===picked?' selected':''}>${esc(n)}</option>`).join('');
 }
 function renderClock(){
-  const sel = $('clockName'), picked = sel.value || store.get('bennys-name') || '';
-  sel.innerHTML = '<option value="">Pick your name</option>' +
-    clock.employees.map(n=>`<option${n===picked?' selected':''}>${esc(n)}</option>`).join('');
+  const saved = store.get('bennys-name') || '';
+  $('clockName').innerHTML = nameOptions(clock.employees, $('clockName').value || saved, 'Pick your name');
+  // only punched-in employees can complete a sale
+  const on = clock.onShift.map(s=>s.name);
+  $('saleName').innerHTML = nameOptions(on, $('saleName').value || saved, on.length ? 'Pick your name' : 'Nobody is punched in');
+  updateSaleBtn();
   $('onShift').innerHTML = clock.onShift.length
     ? clock.onShift.map(s=>`<li><span><span class="dot"></span>${esc(s.name)}</span>
         <span class="since">since ${new Date(s.since).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})} · ${since(s.since)}</span></li>`).join('')
@@ -778,7 +801,28 @@ $('punchBtn').addEventListener('click', async ()=>{
     if (r.ok) $('clockPin').value = '';
   }catch(e){ clockMsg("Couldn't save. Try again.", 'err'); updatePunchBtn(); }
 });
-setInterval(()=>{ if (page==='clock') loadClock(); }, 60000);   // keep "on shift" times fresh
+
+// ---- complete sale (checkout) --------------------------------------------
+function updateSaleBtn(){
+  $('saleBtn').disabled = !$('saleName').value || !Object.keys(cart).length || !CLOCK_URL;
+}
+$('saleName').addEventListener('change', ()=>{ store.set('bennys-name', $('saleName').value); updateSaleBtn(); saleMsg(''); });
+$('salePin').addEventListener('keydown', e=>{ if (e.key==='Enter') $('saleBtn').click(); });
+$('saleBtn').addEventListener('click', async ()=>{
+  const name = $('saleName').value, pin = $('salePin').value.trim();
+  const items = Object.entries(cart).map(([n,c])=>({name:n, qty:c.qty, unit:c.unit}));
+  if (!items.length) return saleMsg('Add items to the order first.', 'err');
+  if (!pin) return saleMsg('Enter your PIN.', 'err');
+  $('saleBtn').disabled = true; saleMsg('Saving sale…');
+  try{
+    const r = await clockCall({name, pin, action:'sale', items});
+    saleMsg(r.ok ? r.message : r.error, r.ok ? 'ok' : 'err');
+    if (r.ok){ $('salePin').value = ''; for (const n in cart) delete cart[n]; renderCart(); }
+  }catch(e){ saleMsg("Couldn't save the sale. Try again.", 'err'); }
+  updateSaleBtn();
+});
+
+setInterval(()=>{ if (page==='clock' || page==='checkout') loadClock(); }, 60000);   // keep "on shift" fresh
 
 // ---- pages: menu is the landing page; #calc, #checkout and #clock open the others --
 const PAGES = ['menu','calc','checkout','clock'];
@@ -788,7 +832,7 @@ function show(p){
   document.querySelectorAll('nav a').forEach(a=>
     a.setAttribute('aria-current', a.getAttribute('href') === '#'+p ? 'page' : 'false'));
   refreshTotals();
-  if (p === 'clock') loadClock();
+  if (p === 'clock' || p === 'checkout') loadClock();
 }
 document.querySelectorAll('nav a, a.link').forEach(a=>a.addEventListener('click', e=>{
   e.preventDefault();
