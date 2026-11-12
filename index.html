@@ -146,6 +146,27 @@
   .cartbar:hover{transform:translateX(-50%) translateY(-3px)}
   .cartbar b{font-family:var(--num);font-size:24px;letter-spacing:.03em;font-weight:400}
 
+  /* time clock */
+  .clock-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:22px;align-items:start}
+  .clock-card{padding:16px 20px 18px;border-color:var(--c);box-shadow:6px 6px 0 var(--c)}
+  .clock-card h2{margin-bottom:12px;color:var(--c)}
+  .field{display:block;margin-bottom:12px;font-family:var(--num);font-size:17px;letter-spacing:.06em;color:var(--dim)}
+  .field select,.field input{display:block;width:100%;margin-top:4px;background:var(--bg);border:2px solid var(--line);
+    border-radius:8px;color:var(--ink);font:600 17px var(--sans);letter-spacing:normal;padding:9px 12px}
+  .field select:focus,.field input:focus{outline:none;border-color:var(--cyan)}
+  .btn.punch-btn{width:100%;font-family:var(--tag);font-weight:400;font-size:20px;padding:10px;background:var(--green);color:#111;border-color:#111}
+  .btn.punch-btn:hover{color:#111;border-color:#111}
+  .btn.punch-btn.out{background:var(--orange)}
+  .btn.punch-btn:disabled{opacity:.45;cursor:not-allowed}
+  .clock-msg{min-height:1.5em;margin-top:10px;font-weight:700;text-align:center;color:var(--dim)}
+  .clock-msg.ok{color:var(--green)} .clock-msg.err{color:var(--pink)}
+  #onShift{list-style:none}
+  #onShift li{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 0;font-weight:700}
+  #onShift li+li{border-top:1px solid var(--line-soft)}
+  #onShift .empty{color:var(--dim);font-weight:600}
+  #onShift .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--green);margin-right:9px;box-shadow:0 0 8px var(--green)}
+  #onShift .since{color:var(--dim);font-size:13px;font-weight:600}
+
   /* ---------- calculator ---------- */
   .tabs{display:flex;gap:4px;background:var(--panel);border:2px solid var(--line);border-radius:var(--r);
     padding:4px;width:fit-content;max-width:100%;margin:0 auto 12px;flex-wrap:wrap;justify-content:center}
@@ -256,6 +277,7 @@
     <a href="#menu">Price Menu</a>
     <a href="#calc">Calculator</a>
     <a href="#checkout">Checkout<span class="badge" id="cartBadge" hidden></span></a>
+    <a href="#clock">Time Clock</a>
   </nav>
 
   <!-- ===================== PRICE MENU ===================== -->
@@ -325,6 +347,24 @@
     <div class="order-actions">
       <button class="btn" id="copyOrder">Copy Receipt</button>
       <button class="btn" id="clearOrder">Clear Order</button>
+    </div>
+  </section>
+
+  <!-- ===================== TIME CLOCK ===================== -->
+  <section id="clock" hidden>
+    <p class="note">Pick your name, enter your PIN, and punch in when you start or out when you leave.</p>
+    <div class="clock-grid">
+      <div class="card clock-card" style="--c:var(--cyan)">
+        <h2>Punch</h2>
+        <label class="field">Name<select id="clockName"></select></label>
+        <label class="field">PIN<input id="clockPin" type="password" inputmode="numeric" autocomplete="off" maxlength="8"></label>
+        <button class="btn punch-btn" id="punchBtn" disabled>Punch In</button>
+        <p class="clock-msg" id="clockMsg" role="status"></p>
+      </div>
+      <div class="card clock-card" style="--c:var(--green)">
+        <h2>On Shift Now</h2>
+        <ul id="onShift"></ul>
+      </div>
     </div>
   </section>
 
@@ -686,14 +726,69 @@ $('copyOrder').addEventListener('click', ()=>{
   copyText(rows.map(([n,c])=>c.qty === 1 ? n : `${c.qty}x ${n}`).join(', '), 'Receipt copied');
 });
 
-// ---- pages: menu is the landing page; #calc and #checkout open the others --
-const PAGES = ['menu','calc','checkout'];
+// ---- time clock --------------------------------------------------------
+// Google Apps Script web app URL (ends in /exec). Setup steps: timeclock/Code.gs
+const CLOCK_URL = 'https://script.google.com/macros/s/AKfycbzv0nZU0kwsrAhg0IF9WeGe9ctvHul5qYArFwfjEDMA4j8Hze8TkNxL027CnTr8aYVR/exec';
+let clock = {employees:[], onShift:[]};
+const esc = s => String(s).replace(/[&<>"']/g, ch=>`&#${ch.charCodeAt(0)};`);
+const since = ms => {
+  const m = Math.max(0, Math.floor((Date.now()-ms)/60000));
+  return m < 60 ? `${m}m` : `${Math.floor(m/60)}h ${m%60}m`;
+};
+function clockMsg(text, kind){ $('clockMsg').textContent = text; $('clockMsg').className = 'clock-msg ' + (kind||''); }
+
+async function clockCall(body){
+  // text/plain keeps the request "simple", so Google's web app accepts it from this site
+  const res = await fetch(CLOCK_URL, body ? {method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(body)} : {});
+  return res.json();
+}
+async function loadClock(){
+  if (!CLOCK_URL) return clockMsg("The time clock isn't connected yet.", 'err');
+  try{ clock = await clockCall(); renderClock(); }
+  catch(e){ clockMsg("Can't reach the time clock. Check your connection.", 'err'); }
+}
+function renderClock(){
+  const sel = $('clockName'), picked = sel.value || store.get('bennys-name') || '';
+  sel.innerHTML = '<option value="">Pick your name</option>' +
+    clock.employees.map(n=>`<option${n===picked?' selected':''}>${esc(n)}</option>`).join('');
+  $('onShift').innerHTML = clock.onShift.length
+    ? clock.onShift.map(s=>`<li><span><span class="dot"></span>${esc(s.name)}</span>
+        <span class="since">since ${new Date(s.since).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})} · ${since(s.since)}</span></li>`).join('')
+    : '<li class="empty">Nobody is on shift.</li>';
+  updatePunchBtn();
+}
+function updatePunchBtn(){
+  const name = $('clockName').value, isIn = clock.onShift.some(s=>s.name===name);
+  $('punchBtn').disabled = !name || !CLOCK_URL;
+  $('punchBtn').textContent = isIn ? 'Punch Out' : 'Punch In';
+  $('punchBtn').classList.toggle('out', isIn);
+}
+$('clockName').addEventListener('change', ()=>{ store.set('bennys-name', $('clockName').value); updatePunchBtn(); clockMsg(''); });
+$('clockPin').addEventListener('keydown', e=>{ if (e.key==='Enter') $('punchBtn').click(); });
+$('punchBtn').addEventListener('click', async ()=>{
+  const name = $('clockName').value, pin = $('clockPin').value.trim();
+  if (!pin) return clockMsg('Enter your PIN.', 'err');
+  const action = clock.onShift.some(s=>s.name===name) ? 'out' : 'in';
+  $('punchBtn').disabled = true; clockMsg('Saving…');
+  try{
+    const r = await clockCall({name, pin, action});
+    if (r.employees) clock = r;
+    renderClock();
+    clockMsg(r.ok ? r.message : r.error, r.ok ? 'ok' : 'err');
+    if (r.ok) $('clockPin').value = '';
+  }catch(e){ clockMsg("Couldn't save. Try again.", 'err'); updatePunchBtn(); }
+});
+setInterval(()=>{ if (page==='clock') loadClock(); }, 60000);   // keep "on shift" times fresh
+
+// ---- pages: menu is the landing page; #calc, #checkout and #clock open the others --
+const PAGES = ['menu','calc','checkout','clock'];
 function show(p){
   page = p;
   PAGES.forEach(id=>$(id).hidden = id !== p);
   document.querySelectorAll('nav a').forEach(a=>
     a.setAttribute('aria-current', a.getAttribute('href') === '#'+p ? 'page' : 'false'));
   refreshTotals();
+  if (p === 'clock') loadClock();
 }
 document.querySelectorAll('nav a, a.link').forEach(a=>a.addEventListener('click', e=>{
   e.preventDefault();
