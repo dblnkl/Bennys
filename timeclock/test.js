@@ -7,7 +7,7 @@ function sheet(data){ return {
     setValue:v=>{ data[r-1][c-1]=v; }, setFormulaR1C1:f=>{ data[r-1][c-1]='(formula)'; } }; },
   appendRow(row){ data.push(row); return this; } }; }
 const sheets = { Employees: sheet([['Name','PIN'],['Ana','0420'],['Bo','1111'],['Cy','2222']]), Shifts: sheet([['Name','Clock In','Clock Out','Hours']]),
-  Sales: sheet([['Time','Employee','Items','Total']]) };
+  Sales: sheet([['Time','Employee','Items','Total']]), Crafting: sheet([['Time','Employee','Items']]) };
 const cache = {};
 const ctx = { SpreadsheetApp:{ getActive:()=>({ getSheetByName:n=>sheets[n] }) },
   CacheService:{ getScriptCache:()=>({ get:k=>cache[k]??null, put:(k,v)=>{cache[k]=v;}, remove:k=>{delete cache[k];} }) },
@@ -43,4 +43,12 @@ assert.match(post({name:'Ana', pin:'0420', action:'sale', items:[]}).error, /emp
 assert.match(post({name:'Ana', pin:'0420', action:'sale', items:[{name:'X', qty:-3, unit:5}]}).error, /looks wrong/);
 assert.match(post({name:'Ana', pin:'0420', action:'sale', items:[{name:'X', qty:1, unit:'lots'}]}).error, /looks wrong/);
 assert.strictEqual(sheets.Sales.data.length, 2, 'rejected sales are not saved');
+
+// crafting log
+const c = post({name:'Ana', pin:'0420', action:'craft', items:[{name:'Lockpick', qty:10, unit:2000}, {name:'Harness', qty:1, unit:4000}]});
+assert.strictEqual(c.ok, true);
+assert.strictEqual(sheets.Crafting.data[1].slice(1).join(' | '), 'Ana | 10x Lockpick, Harness');
+assert.strictEqual(sheets.Sales.data.length, 2, 'crafting does not touch Sales');
+assert.match(post({name:'Cy', pin:'2222', action:'craft', items:order}).error, /must be punched in to log crafting/);
+assert.strictEqual(sheets.Crafting.data.length, 2);
 console.log('all time clock checks passed');

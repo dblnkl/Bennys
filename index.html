@@ -169,6 +169,7 @@
   .sale{margin-top:24px}
   .sale-hint{color:var(--dim);font-size:13.5px;margin:-4px 0 12px}
   .sale-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:0 14px}
+  .sale-btns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:10px 14px}
 
   /* ---------- calculator ---------- */
   .tabs{display:flex;gap:4px;background:var(--panel);border:2px solid var(--line);border-radius:var(--r);
@@ -352,13 +353,16 @@
       <button class="btn" id="clearOrder">Clear Order</button>
     </div>
     <div class="card clock-card sale" style="--c:var(--green)">
-      <h2>Complete Sale</h2>
-      <p class="sale-hint">Saves this order to the sales sheet. Only employees who are punched in can complete a sale.</p>
+      <h2>Save This Order</h2>
+      <p class="sale-hint"><b>Complete Sale</b> saves it to the sales sheet. <b>Log as Crafted</b> saves it to the crafting log (no money). Only employees who are punched in can save.</p>
       <div class="sale-fields">
         <label class="field">Employee<select id="saleName"></select></label>
         <label class="field">PIN<input id="salePin" type="password" inputmode="numeric" autocomplete="off" maxlength="8"></label>
       </div>
-      <button class="btn punch-btn" id="saleBtn" disabled>Complete Sale</button>
+      <div class="sale-btns">
+        <button class="btn punch-btn" id="saleBtn" disabled>Complete Sale</button>
+        <button class="btn punch-btn out" id="craftBtn" disabled>Log as Crafted</button>
+      </div>
       <p class="clock-msg" id="saleMsg" role="status"></p>
     </div>
   </section>
@@ -804,23 +808,27 @@ $('punchBtn').addEventListener('click', async ()=>{
 
 // ---- complete sale (checkout) --------------------------------------------
 function updateSaleBtn(){
-  $('saleBtn').disabled = !$('saleName').value || !Object.keys(cart).length || !CLOCK_URL;
+  $('saleBtn').disabled = $('craftBtn').disabled = !$('saleName').value || !Object.keys(cart).length || !CLOCK_URL;
 }
 $('saleName').addEventListener('change', ()=>{ store.set('bennys-name', $('saleName').value); updateSaleBtn(); saleMsg(''); });
 $('salePin').addEventListener('keydown', e=>{ if (e.key==='Enter') $('saleBtn').click(); });
-$('saleBtn').addEventListener('click', async ()=>{
+// action 'sale' goes to the Sales tab, 'craft' to the Crafting tab
+async function saveOrder(action){
   const name = $('saleName').value, pin = $('salePin').value.trim();
   const items = Object.entries(cart).map(([n,c])=>({name:n, qty:c.qty, unit:c.unit}));
   if (!items.length) return saleMsg('Add items to the order first.', 'err');
   if (!pin) return saleMsg('Enter your PIN.', 'err');
-  $('saleBtn').disabled = true; saleMsg('Saving sale…');
+  $('saleBtn').disabled = $('craftBtn').disabled = true;
+  saleMsg(action === 'craft' ? 'Logging crafting…' : 'Saving sale…');
   try{
-    const r = await clockCall({name, pin, action:'sale', items});
+    const r = await clockCall({name, pin, action, items});
     saleMsg(r.ok ? r.message : r.error, r.ok ? 'ok' : 'err');
     if (r.ok){ $('salePin').value = ''; for (const n in cart) delete cart[n]; renderCart(); }
-  }catch(e){ saleMsg("Couldn't save the sale. Try again.", 'err'); }
+  }catch(e){ saleMsg("Couldn't save. Try again.", 'err'); }
   updateSaleBtn();
-});
+}
+$('saleBtn').addEventListener('click', ()=>saveOrder('sale'));
+$('craftBtn').addEventListener('click', ()=>saveOrder('craft'));
 
 setInterval(()=>{ if (page==='clock' || page==='checkout') loadClock(); }, 60000);   // keep "on shift" fresh
 

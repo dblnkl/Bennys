@@ -6,7 +6,7 @@
  * 1. Make a new Google Sheet (go to sheets.new) and name it "Benny's Time Clock".
  * 2. In the sheet: Extensions > Apps Script. Delete the sample code, paste this whole file, click Save.
  * 3. In the function dropdown at the top pick "setup", click Run, and allow access when Google asks.
- *    This creates the Employees, Shifts, Hours, Sales and Sales Totals tabs.
+ *    This creates the Employees, Shifts, Hours, Sales, Sales Totals and Crafting tabs.
  * 4. In the Employees tab, type each employee's name in column A and their PIN in column B.
  * 5. Deploy > New deployment > gear icon > Web app.
  *    Execute as: Me.  Who has access: Anyone.  Click Deploy.
@@ -21,6 +21,7 @@
  * Hours:        per employee: hours this week (since Monday) and hours all time.
  * Sales:        one row per completed sale (Time | Employee | Items | Total).
  * Sales Totals: per employee: sales this week (since Monday) and sales all time.
+ * Crafting:     one row per crafting log from the site (Time | Employee | Items).
  */
 
 const MAX_WRONG_PINS = 5;   // wrong PINs allowed per name...
@@ -45,8 +46,9 @@ function setup() {
     sh.setFrozenRows(1);
     const n = `${src}!${nameCol}2:${nameCol}`, v = `${src}!${valueCol}2:${valueCol}`, t = `${src}!${timeCol}2:${timeCol}`;
     sh.getRange('A2').setFormula(`=IFERROR(SORT(UNIQUE(FILTER(${n},${n}<>""))),)`);
-    sh.getRange('B2').setFormula(`=ARRAYFORMULA(IF(A2:A="",,SUMIFS(${v},${n},A2:A,${t},">="&${MONDAY})))`);
-    sh.getRange('C2').setFormula(`=ARRAYFORMULA(IF(A2:A="",,SUMIFS(${v},${n},A2:A)))`);
+    // MAP runs SUMIFS once per name (SUMIFS inside ARRAYFORMULA gives every row the same total)
+    sh.getRange('B2').setFormula(`=MAP(A2:A,LAMBDA(e,IF(e="",,SUMIFS(${v},${n},e,${t},">="&${MONDAY}))))`);
+    sh.getRange('C2').setFormula(`=MAP(A2:A,LAMBDA(e,IF(e="",,SUMIFS(${v},${n},e))))`);
     if (format) sh.getRange('B:C').setNumberFormat(format);
     return sh;
   };
@@ -76,6 +78,10 @@ function setup() {
   paint(sales, '#ff7b1c', 4);
   sales.setColumnWidth(1, 210).setColumnWidth(3, 420);
   sales.getRange('D2:D').setFontColor('#3ee08a').setFontWeight('bold');
+  const crafting = tab('Crafting', ['Time', 'Employee', 'Items']);
+  crafting.getRange('A:A').setNumberFormat(DATE_FORMAT);
+  paint(crafting, '#3ee08a', 3);
+  crafting.setColumnWidth(1, 210).setColumnWidth(3, 420);
 
   paint(totals('Hours', ['Employee', 'Hours this week (since Monday)', 'Hours all time'], 'Shifts', 'A', 'D', 'B'), '#ffd60a', 3);
   paint(totals('Sales Totals', ['Employee', 'Sales this week (since Monday)', 'Sales all time'], 'Sales', 'B', 'D', 'A', '$#,##0'), '#9b5cff', 3);
@@ -90,16 +96,17 @@ function doGet() {
   return json(status());
 }
 
-// POST {name, pin, action: 'in' | 'out'}  or  {name, pin, action: 'sale', items: [{name, qty, unit}]}
+// POST {name, pin, action: 'in' | 'out'}  or  {name, pin, action: 'sale' | 'craft', items: [{name, qty, unit}]}
 function doPost(e) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
     const body = JSON.parse(e.postData.contents);
-    if (!['in', 'out', 'sale'].includes(body.action)) return json({ ok: false, error: 'Unknown action.' });
+    if (!['in', 'out', 'sale', 'craft'].includes(body.action)) return json({ ok: false, error: 'Unknown action.' });
     const who = checkPin(String(body.name || '').trim(), String(body.pin || '').trim());
     if (who.error) return json({ ok: false, error: who.error });
-    return json(body.action === 'sale' ? sale(who.name, body.items) : punch(who.name, body.action));
+    const isOrder = body.action === 'sale' || body.action === 'craft';
+    return json(isOrder ? order(who.name, body.items, body.action) : punch(who.name, body.action));
   } catch (err) {
     return json({ ok: false, error: 'Something went wrong. Try again.' });
   } finally {
@@ -143,8 +150,10 @@ function punch(who, action) {
 
 // ponytail: prices come from the site (the menu lives there), so totals are only as honest as the employee.
 // Move the price list into the sheet if that ever matters.
-function sale(who, items) {
-  if (openShiftRow(who) < 0) return { ok: false, error: `${who} must be punched in to complete a sale.` };
+// 'sale' adds a row to Sales (with the total); 'craft' adds a row to Crafting (items only)
+function order(who, items, action) {
+  const craft = action === 'craft';
+  if (openShiftRow(who) < 0) return { ok: false, error: `${who} must be punched in to ${craft ? 'log crafting' : 'complete a sale'}.` };
   if (!Array.isArray(items) || !items.length) return { ok: false, error: 'This order is empty.' };
   if (items.length > 100) return { ok: false, error: 'Too many items in one sale.' };
 
@@ -159,6 +168,10 @@ function sale(who, items) {
     }
     total += qty * unit;
     parts.push(qty === 1 ? name : `${qty}x ${name}`);
+  }
+  if (craft) {
+    SpreadsheetApp.getActive().getSheetByName('Crafting').appendRow([new Date(), who, parts.join(', ')]);
+    return { ok: true, message: `Crafting logged for ${who}.` };
   }
   SpreadsheetApp.getActive().getSheetByName('Sales').appendRow([new Date(), who, parts.join(', '), total]);
   return { ok: true, total, message: `Sale saved: $${total.toLocaleString('en-US')} by ${who}.` };
