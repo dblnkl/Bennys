@@ -117,8 +117,13 @@
   .search-toggle[aria-expanded="true"]{background:var(--cyan);color:#111;border-color:#111;box-shadow:4px 4px 0 var(--pink)}
 
   /* inventory card at the bottom of the price menu; in inventory mode, taps add here instead of to the order */
-  .inv-card{max-width:640px;margin:8px auto 70px}   /* bottom gap keeps the floating order bar off the Log button */
-  #invMode{margin-bottom:12px}
+  .inv-card{margin:8px 0 70px}   /* spans both menu columns; bottom gap keeps the floating order bar off the Log button */
+  .inv-head{display:flex;justify-content:space-between;align-items:center;gap:6px 18px;flex-wrap:wrap}
+  .inv-head > div{flex:1 1 380px} .inv-head .sale-hint{margin-bottom:8px}
+  .inv-foot{display:grid;grid-template-columns:1fr 170px 260px;gap:14px;align-items:end;margin-top:6px}
+  .inv-foot .field{margin:0}
+  .inv-foot .btn.punch-btn{padding:9px 10px}
+  @media (max-width:640px){.inv-foot{grid-template-columns:1fr}}
   #invMode[aria-pressed="true"]{background:var(--cyan);color:#111;border-color:#111}
   #invRows .row{padding:8px 0}
   #invRows .row-name{min-width:140px}
@@ -320,15 +325,19 @@
     <div class="menu" id="menuGrid"></div>
 
     <div class="card clock-card inv-card" style="--c:var(--cyan)">
-      <h2>Add to Inventory</h2>
-      <p class="sale-hint">Turn on inventory mode, then tap items on the price sheet to add them here. Logging adds them to the Inventory and Crafting tabs.</p>
-      <button class="btn" id="invMode" aria-pressed="false">Inventory mode: Off</button>
+      <div class="inv-head">
+        <div>
+          <h2>Add to Inventory</h2>
+          <p class="sale-hint">Turn on inventory mode, then tap items on the price sheet to add them here. Logging adds them to the Inventory and Crafting tabs.</p>
+        </div>
+        <button class="btn" id="invMode" aria-pressed="false">Inventory mode: Off</button>
+      </div>
       <div id="invRows"></div>
-      <div class="sale-fields">
+      <div class="inv-foot">
         <label class="field">Employee<select id="invName"></select></label>
         <label class="field">PIN<input id="invPin" type="password" inputmode="numeric" autocomplete="off" maxlength="8"></label>
+        <button class="btn punch-btn" id="invBtn" disabled>Log to Inventory</button>
       </div>
-      <button class="btn punch-btn" id="invBtn" disabled>Log to Inventory</button>
       <p class="clock-msg" id="invMsg" role="status"></p>
     </div>
   </section>
