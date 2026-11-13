@@ -4,10 +4,13 @@ function sheet(data){ return {
   data, getLastRow(){ return data.length; }, getLastColumn(){ return Math.max(...data.map(r=>r.length)); },
   getRange(r,c,nr=1,nc=1){ return {
     getValues:()=>data.slice(r-1,r-1+nr).map(row=>{ const a=row.slice(c-1,c-1+nc); while(a.length<nc)a.push(''); return a; }),
-    setValue:v=>{ data[r-1][c-1]=v; }, setFormulaR1C1:f=>{ data[r-1][c-1]='(formula)'; } }; },
+    setValue:v=>{ data[r-1][c-1]=v; }, setFormulaR1C1:f=>{ data[r-1][c-1]='(formula)'; },
+    setValues:vs=>vs.forEach((row,i)=>row.forEach((v,j)=>{ data[r-1+i][c-1+j]=v; })) }; },
   appendRow(row){ data.push(row); return this; } }; }
 const sheets = { Employees: sheet([['Name','PIN'],['Ana','0420'],['Bo','1111'],['Cy','2222']]), Shifts: sheet([['Name','Clock In','Clock Out','Hours']]),
-  Sales: sheet([['Time','Employee','Items','Total']]), Crafting: sheet([['Time','Employee','Items']]) };
+  Sales: sheet([['Time','Employee','Items','Total']]), Crafting: sheet([['Time','Employee','Items']]),
+  Inventory: sheet([['Item','In Stock','Crafted (all time)','Sold (all time)','Last Change'],['Across',0,0,0,''],['Lockpick',0,0,0,'']]) };
+const inv = n => sheets.Inventory.data.find(r=>r[0]===n);
 const cache = {};
 const ctx = { SpreadsheetApp:{ getActive:()=>({ getSheetByName:n=>sheets[n] }) },
   CacheService:{ getScriptCache:()=>({ get:k=>cache[k]??null, put:(k,v)=>{cache[k]=v;}, remove:k=>{delete cache[k];} }) },
@@ -51,4 +54,17 @@ assert.strictEqual(sheets.Crafting.data[1].slice(1).join(' | '), 'Ana | 10x Lock
 assert.strictEqual(sheets.Sales.data.length, 2, 'crafting does not touch Sales');
 assert.match(post({name:'Cy', pin:'2222', action:'craft', items:order}).error, /must be punched in to log crafting/);
 assert.strictEqual(sheets.Crafting.data.length, 2);
+
+// inventory: crafting above added 10 Lockpick and a new Harness row; earlier sale of untracked items changed nothing
+assert.deepStrictEqual(inv('Lockpick').slice(1,4).join(), '10,10,0');
+assert.deepStrictEqual(inv('Harness').slice(1,4).join(), '1,1,0', 'crafting a new item adds its row');
+assert.ok(!inv('S5 Brakes'), 'selling an untracked item adds no row');
+post({name:'Ana', pin:'0420', action:'craft', items:[{name:'Across', qty:5, unit:2000}]});
+post({name:'Ana', pin:'0420', action:'sale', items:[{name:'Across (After Dark)', qty:2, unit:1700}, {name:'Lockpick', qty:3, unit:2000}]});
+assert.strictEqual(inv('Across').slice(1,4).join(), '3,5,2', 'After Dark across comes out of Across stock');
+assert.strictEqual(inv('Lockpick').slice(1,4).join(), '7,10,3');
+assert.strictEqual(sheets.Sales.data.at(-1)[2], '2x Across (After Dark), 3x Lockpick');
+assert.strictEqual(sheets.Sales.data.at(-1)[3], 9400);
+post({name:'Cy', pin:'2222', action:'sale', items:[{name:'Across', qty:1, unit:2000}]});
+assert.strictEqual(inv('Across')[1], 3, 'rejected sale leaves stock alone');
 console.log('all time clock checks passed');

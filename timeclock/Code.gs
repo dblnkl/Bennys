@@ -6,7 +6,7 @@
  * 1. Make a new Google Sheet (go to sheets.new) and name it "Benny's Time Clock".
  * 2. In the sheet: Extensions > Apps Script. Delete the sample code, paste this whole file, click Save.
  * 3. In the function dropdown at the top pick "setup", click Run, and allow access when Google asks.
- *    This creates the Employees, Shifts, Hours, Sales, Sales Totals and Crafting tabs.
+ *    This creates the Employees, Shifts, Hours, Sales, Sales Totals, Crafting and Inventory tabs.
  * 4. In the Employees tab, type each employee's name in column A and their PIN in column B.
  * 5. Deploy > New deployment > gear icon > Web app.
  *    Execute as: Me.  Who has access: Anyone.  Click Deploy.
@@ -22,6 +22,8 @@
  * Sales:        one row per completed sale (Time | Employee | Items | Total).
  * Sales Totals: per employee: sales this week (since Monday) and sales all time.
  * Crafting:     one row per crafting log from the site (Time | Employee | Items).
+ * Inventory:    stock per item. Crafting adds, sales subtract. Fix "In Stock" by hand after a count;
+ *               add a row (Item name as on the menu, In Stock) to start tracking anything else.
  */
 
 const MAX_WRONG_PINS = 5;   // wrong PINs allowed per name...
@@ -82,6 +84,13 @@ function setup() {
   crafting.getRange('A:A').setNumberFormat(DATE_FORMAT);
   paint(crafting, '#3ee08a', 3);
   crafting.setColumnWidth(1, 210).setColumnWidth(3, 420);
+  const inv = tab('Inventory', ['Item', 'In Stock', 'Crafted (all time)', 'Sold (all time)', 'Last Change']);
+  if (inv.getLastRow() === 1) ['Across', 'Lockpick', 'Adv Repair Kit'].forEach(n => inv.appendRow([n, 0, 0, 0, '']));
+  inv.getRange('B:D').setNumberFormat('0;[Red]-0');   // negative stock shows red
+  inv.getRange('E:E').setNumberFormat(DATE_FORMAT);
+  paint(inv, '#1fd6e8', 5);
+  inv.setColumnWidth(5, 210);
+  inv.getRange('B2:B').setFontWeight('bold').setFontSize(13);
 
   paint(totals('Hours', ['Employee', 'Hours this week (since Monday)', 'Hours all time'], 'Shifts', 'A', 'D', 'B'), '#ffd60a', 3);
   paint(totals('Sales Totals', ['Employee', 'Sales this week (since Monday)', 'Sales all time'], 'Sales', 'B', 'D', 'A', '$#,##0'), '#9b5cff', 3);
@@ -169,12 +178,36 @@ function order(who, items, action) {
     total += qty * unit;
     parts.push(qty === 1 ? name : `${qty}x ${name}`);
   }
+  stock(items, craft);
   if (craft) {
     SpreadsheetApp.getActive().getSheetByName('Crafting').appendRow([new Date(), who, parts.join(', ')]);
     return { ok: true, message: `Crafting logged for ${who}.` };
   }
   SpreadsheetApp.getActive().getSheetByName('Sales').appendRow([new Date(), who, parts.join(', '), total]);
   return { ok: true, total, message: `Sale saved: $${total.toLocaleString('en-US')} by ${who}.` };
+}
+
+// Inventory tab: crafting adds stock, sales take it away. "Across (After Dark)" counts as "Across".
+// Crafting a new item adds its row; selling an item with no row is not tracked (add a row to track it).
+function stock(items, craft) {
+  const inv = SpreadsheetApp.getActive().getSheetByName('Inventory');
+  const data = rows('Inventory');
+  const now = new Date();
+  for (const it of items) {
+    const name = String(it.name).trim().replace(/\s*\(.*\)$/, '');
+    const qty = Math.floor(Number(it.qty));
+    let i = data.findIndex(r => String(r[0]).trim().toLowerCase() === name.toLowerCase());
+    if (i < 0) {
+      if (!craft) continue;
+      inv.appendRow([name, 0, 0, 0, '']);
+      data.push([name, 0, 0, 0, '']);
+      i = data.length - 1;
+    }
+    const r = data[i];
+    r[1] = Number(r[1] || 0) + (craft ? qty : -qty);
+    if (craft) r[2] = Number(r[2] || 0) + qty; else r[3] = Number(r[3] || 0) + qty;
+    inv.getRange(i + 2, 2, 1, 4).setValues([[r[1], r[2], r[3], now]]);
+  }
 }
 
 function status() {
