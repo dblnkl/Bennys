@@ -151,9 +151,9 @@
   .clock-card{padding:16px 20px 18px;border-color:var(--c);box-shadow:6px 6px 0 var(--c)}
   .clock-card h2{margin-bottom:12px;color:var(--c)}
   .field{display:block;margin-bottom:12px;font-family:var(--num);font-size:17px;letter-spacing:.06em;color:var(--dim)}
-  .field select,.field input{display:block;width:100%;margin-top:4px;background:var(--bg);border:2px solid var(--line);
+  .field select,.field input,.craft-log select,.craft-log input{display:block;width:100%;margin-top:4px;background:var(--bg);border:2px solid var(--line);
     border-radius:8px;color:var(--ink);font:600 17px var(--sans);letter-spacing:normal;padding:9px 12px}
-  .field select:focus,.field input:focus{outline:none;border-color:var(--cyan)}
+  .field select:focus,.field input:focus,.craft-log select:focus,.craft-log input:focus{outline:none;border-color:var(--cyan)}
   .btn.punch-btn{width:100%;font-family:var(--tag);font-weight:400;font-size:20px;padding:10px;background:var(--green);color:#111;border-color:#111}
   .btn.punch-btn:hover{color:#111;border-color:#111}
   .btn.punch-btn.out{background:var(--orange)}
@@ -169,7 +169,13 @@
   .sale{margin-top:24px}
   .sale-hint{color:var(--dim);font-size:13.5px;margin:-4px 0 12px}
   .sale-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:0 14px}
-  .sale-btns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:10px 14px}
+  /* crafting log row inside the calculator's blue bins card */
+  .craft-log{flex-basis:100%;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;align-items:center;
+    border-top:2px dashed var(--line-soft);padding-top:14px}
+  .craft-log .lbl{font-family:var(--num);font-size:19px;letter-spacing:.06em;color:var(--dim)}
+  .craft-log select{width:190px;margin:0} .craft-log input{width:110px;margin:0}
+  .craft-log .btn.punch-btn{width:auto;min-width:190px;font-size:18px;padding:8px 16px}
+  .craft-log .clock-msg{flex-basis:100%;margin:0;min-height:0}
 
   /* ---------- calculator ---------- */
   .tabs{display:flex;gap:4px;background:var(--panel);border:2px solid var(--line);border-radius:var(--r);
@@ -307,6 +313,13 @@
       <label for="amount" id="amountLabel">Blue bins</label>
       <input id="amount" type="number" min="0" step="1" inputmode="numeric">
       <div class="steppers" id="steppers"></div>
+      <div class="craft-log">
+        <span class="lbl">Log crafted</span>
+        <select id="craftName" aria-label="Employee"></select>
+        <input id="craftPin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="PIN" aria-label="PIN">
+        <button class="btn punch-btn out" id="craftBtn" disabled>Log</button>
+        <p class="clock-msg" id="craftMsg" role="status"></p>
+      </div>
     </div>
 
     <div class="summary">
@@ -353,16 +366,13 @@
       <button class="btn" id="clearOrder">Clear Order</button>
     </div>
     <div class="card clock-card sale" style="--c:var(--green)">
-      <h2>Save This Order</h2>
-      <p class="sale-hint"><b>Complete Sale</b> saves it to the sales sheet. <b>Log as Crafted</b> saves it to the crafting log (no money). Only employees who are punched in can save.</p>
+      <h2>Complete Sale</h2>
+      <p class="sale-hint">Saves this order to the sales sheet. Only employees who are punched in can complete a sale.</p>
       <div class="sale-fields">
         <label class="field">Employee<select id="saleName"></select></label>
         <label class="field">PIN<input id="salePin" type="password" inputmode="numeric" autocomplete="off" maxlength="8"></label>
       </div>
-      <div class="sale-btns">
-        <button class="btn punch-btn" id="saleBtn" disabled>Complete Sale</button>
-        <button class="btn punch-btn out" id="craftBtn" disabled>Log as Crafted</button>
-      </div>
+      <button class="btn punch-btn" id="saleBtn" disabled>Complete Sale</button>
       <p class="clock-msg" id="saleMsg" role="status"></p>
     </div>
   </section>
@@ -501,6 +511,7 @@ const state = saved.state || {};            // per calc: {mode, amount}
 const loaded = new Set();                   // checked-off benches (parts only)
 const cur = () => state[calc] ||= {mode:'bins', amount:CALCS[calc].cost};
 const val = () => Math.max(0, Math.floor(Number($('amount').value) || 0));
+const plural = u => u + (u.endsWith('s') ? 'es' : 's');   // across → acrosses, kit → kits
 
 let toastTimer;
 function toast(msg){
@@ -565,7 +576,7 @@ function sync(){
   $('amount').value = s.amount;
   // each button shows its bin/qty change, with what it means underneath (e.g. "+1 kit")
   const mult = s.mode==='bins' ? C.cost : 1;
-  const units = C.unit + (C.unit.endsWith('s') ? 'es' : 's');
+  const units = plural(C.unit);
   $('steppers').innerHTML = [-5,-1,1,5].map(n=>{
     const sign = n>0 ? '+' : '−', k = Math.abs(n);
     return `<button class="btn step" data-d="${n*mult}">${sign}${k*mult}${s.mode==='bins' ? `<small>${sign}${k} ${k===1 ? C.unit : units}</small>` : ''}</button>`;
@@ -574,6 +585,7 @@ function sync(){
     $('amount').value = Math.max(0, val() + Number(b.dataset.d)); render();
   }));
   $('benchSection').hidden = C.groups.length < 2;
+  craftMsg('');   // a "logged" note belongs to the tab it was made on
   render();
 }
 
@@ -619,6 +631,7 @@ function render(){
   }).join('') + `<tr class="total"><td>Total bins</td><td class="num">${used}</td><td class="pct"></td></tr>`;
 
   store.set('bennys', {calc, state});
+  updateCraftBtn();
 }
 function updateLoaded(){
   $('loadedCount').textContent = loaded.size;
@@ -757,6 +770,7 @@ const since = ms => {
 function setMsg(id, text, kind){ $(id).textContent = text; $(id).className = 'clock-msg ' + (kind||''); }
 const clockMsg = (text, kind) => setMsg('clockMsg', text, kind);
 const saleMsg  = (text, kind) => setMsg('saleMsg', text, kind);
+const craftMsg = (text, kind) => setMsg('craftMsg', text, kind);
 
 async function clockCall(body){
   // text/plain keeps the request "simple", so Google's web app accepts it from this site
@@ -766,7 +780,7 @@ async function clockCall(body){
 async function loadClock(){
   if (!CLOCK_URL) return clockMsg("The time clock isn't connected yet.", 'err');
   try{ clock = await clockCall(); renderClock(); }
-  catch(e){ const t = "Can't reach the time clock. Check your connection."; clockMsg(t, 'err'); saleMsg(t, 'err'); }
+  catch(e){ const t = "Can't reach the time clock. Check your connection."; clockMsg(t, 'err'); saleMsg(t, 'err'); craftMsg(t, 'err'); }
 }
 function nameOptions(names, picked, blank){
   return `<option value="">${blank}</option>` + names.map(n=>`<option${n===picked?' selected':''}>${esc(n)}</option>`).join('');
@@ -777,7 +791,8 @@ function renderClock(){
   // only punched-in employees can complete a sale
   const on = clock.onShift.map(s=>s.name);
   $('saleName').innerHTML = nameOptions(on, $('saleName').value || saved, on.length ? 'Pick your name' : 'Nobody is punched in');
-  updateSaleBtn();
+  $('craftName').innerHTML = nameOptions(on, $('craftName').value || saved, on.length ? 'Pick your name' : 'Nobody is punched in');
+  updateSaleBtn(); updateCraftBtn();
   $('onShift').innerHTML = clock.onShift.length
     ? clock.onShift.map(s=>`<li><span><span class="dot"></span>${esc(s.name)}</span>
         <span class="since">since ${new Date(s.since).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})} · ${since(s.since)}</span></li>`).join('')
@@ -808,29 +823,45 @@ $('punchBtn').addEventListener('click', async ()=>{
 
 // ---- complete sale (checkout) --------------------------------------------
 function updateSaleBtn(){
-  $('saleBtn').disabled = $('craftBtn').disabled = !$('saleName').value || !Object.keys(cart).length || !CLOCK_URL;
+  $('saleBtn').disabled = !$('saleName').value || !Object.keys(cart).length || !CLOCK_URL;
 }
 $('saleName').addEventListener('change', ()=>{ store.set('bennys-name', $('saleName').value); updateSaleBtn(); saleMsg(''); });
 $('salePin').addEventListener('keydown', e=>{ if (e.key==='Enter') $('saleBtn').click(); });
-// action 'sale' goes to the Sales tab, 'craft' to the Crafting tab
-async function saveOrder(action){
+$('saleBtn').addEventListener('click', async ()=>{
   const name = $('saleName').value, pin = $('salePin').value.trim();
   const items = Object.entries(cart).map(([n,c])=>({name:n, qty:c.qty, unit:c.unit}));
   if (!items.length) return saleMsg('Add items to the order first.', 'err');
   if (!pin) return saleMsg('Enter your PIN.', 'err');
-  $('saleBtn').disabled = $('craftBtn').disabled = true;
-  saleMsg(action === 'craft' ? 'Logging crafting…' : 'Saving sale…');
+  $('saleBtn').disabled = true; saleMsg('Saving sale…');
   try{
-    const r = await clockCall({name, pin, action, items});
+    const r = await clockCall({name, pin, action:'sale', items});
     saleMsg(r.ok ? r.message : r.error, r.ok ? 'ok' : 'err');
     if (r.ok){ $('salePin').value = ''; for (const n in cart) delete cart[n]; renderCart(); }
-  }catch(e){ saleMsg("Couldn't save. Try again.", 'err'); }
+  }catch(e){ saleMsg("Couldn't save the sale. Try again.", 'err'); }
   updateSaleBtn();
-}
-$('saleBtn').addEventListener('click', ()=>saveOrder('sale'));
-$('craftBtn').addEventListener('click', ()=>saveOrder('craft'));
+});
 
-setInterval(()=>{ if (page==='clock' || page==='checkout') loadClock(); }, 60000);   // keep "on shift" fresh
+// ---- log crafted (calculator card): logs what the calculator shows, e.g. "5x Lockpick" --
+function updateCraftBtn(){
+  const {C, per} = totals();
+  $('craftBtn').textContent = `Log ${per} ${per===1 ? C.unit : plural(C.unit)}`;
+  $('craftBtn').disabled = !$('craftName').value || !per || !CLOCK_URL;
+}
+$('craftName').addEventListener('change', ()=>{ store.set('bennys-name', $('craftName').value); updateCraftBtn(); craftMsg(''); });
+$('craftPin').addEventListener('keydown', e=>{ if (e.key==='Enter') $('craftBtn').click(); });
+$('craftBtn').addEventListener('click', async ()=>{
+  const {C, per} = totals(), name = $('craftName').value, pin = $('craftPin').value.trim();
+  if (!pin) return craftMsg('Enter your PIN.', 'err');
+  $('craftBtn').disabled = true; craftMsg('Logging…');
+  try{
+    const r = await clockCall({name, pin, action:'craft', items:[{name:C.menuName, qty:per, unit:C.price}]});
+    craftMsg(r.ok ? r.message : r.error, r.ok ? 'ok' : 'err');
+    if (r.ok) $('craftPin').value = '';
+  }catch(e){ craftMsg("Couldn't log it. Try again.", 'err'); }
+  updateCraftBtn();
+});
+
+setInterval(()=>{ if (page!=='menu') loadClock(); }, 60000);   // keep "on shift" fresh
 
 // ---- pages: menu is the landing page; #calc, #checkout and #clock open the others --
 const PAGES = ['menu','calc','checkout','clock'];
@@ -840,7 +871,7 @@ function show(p){
   document.querySelectorAll('nav a').forEach(a=>
     a.setAttribute('aria-current', a.getAttribute('href') === '#'+p ? 'page' : 'false'));
   refreshTotals();
-  if (p === 'clock' || p === 'checkout') loadClock();
+  if (p !== 'menu') loadClock();
 }
 document.querySelectorAll('nav a, a.link').forEach(a=>a.addEventListener('click', e=>{
   e.preventDefault();
