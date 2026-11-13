@@ -111,6 +111,19 @@
   .search input::placeholder{color:var(--faint)}
   .search input:focus{outline:none;border-color:var(--cyan);box-shadow:4px 4px 0 var(--pink);transform:translate(-2px,-2px)}
   .none{text-align:center;color:var(--dim);font-family:var(--tag);font-size:20px;margin:6px 0 30px}
+  .search-toggle{display:grid;place-items:center;width:46px;background:var(--panel);border:2px solid var(--line);border-radius:10px;
+    color:var(--dim);cursor:pointer;transition:transform .16s cubic-bezier(.3,1.6,.5,1),box-shadow .16s,color .14s,border-color .14s}
+  .search-toggle:hover{color:var(--ink);border-color:var(--ink);transform:translate(-2px,-2px);box-shadow:4px 4px 0 var(--cyan)}
+  .search-toggle[aria-expanded="true"]{background:var(--cyan);color:#111;border-color:#111;box-shadow:4px 4px 0 var(--pink)}
+
+  /* inventory card at the bottom of the price menu; in inventory mode, taps add here instead of to the order */
+  .inv-card{max-width:640px;margin:8px auto 70px}   /* bottom gap keeps the floating order bar off the Log button */
+  #invMode{margin-bottom:12px}
+  #invMode[aria-pressed="true"]{background:var(--cyan);color:#111;border-color:#111}
+  #invRows .row{padding:8px 0}
+  #invRows .row-name{min-width:140px}
+  body.inv-mode .incart{background:var(--cyan)}
+  body.inv-mode .cat{border-style:dashed}
 
   /* menu items are tap-to-add buttons */
   button.item{width:100%;background:none;border:0;font:inherit;color:inherit;text-align:left;cursor:pointer;transition:background .12s}
@@ -290,16 +303,32 @@
     <a href="#calc">Calculator</a>
     <a href="#clock">Time Clock</a>
     <a href="#checkout">Checkout<span class="badge" id="cartBadge" hidden></span></a>
+    <button class="search-toggle" id="searchToggle" aria-label="Search prices" aria-expanded="false" aria-controls="searchBox">
+      <svg width="22" height="22" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><circle cx="7.5" cy="7.5" r="5.5"/><path d="M12 12l4.5 4.5"/></svg>
+    </button>
   </nav>
 
   <!-- ===================== PRICE MENU ===================== -->
   <section id="menu">
     <p class="note">Employee price sheet. <b>Charge these prices per item.</b> Tap an item to add it to an order.</p>
-    <div class="search">
+    <div class="search" id="searchBox" hidden>
       <input id="search" type="search" placeholder="Search prices… turbo, S5, V12" aria-label="Search prices" autocomplete="off">
     </div>
     <p class="none" id="noMatch" hidden>Nothing on the menu matches that.</p>
     <div class="menu" id="menuGrid"></div>
+
+    <div class="card clock-card inv-card" style="--c:var(--cyan)">
+      <h2>Add to Inventory</h2>
+      <p class="sale-hint">Turn on inventory mode, then tap items on the price sheet to add them here. Logging adds them to the Inventory and Crafting tabs.</p>
+      <button class="btn" id="invMode" aria-pressed="false">Inventory mode: Off</button>
+      <div id="invRows"></div>
+      <div class="sale-fields">
+        <label class="field">Employee<select id="invName"></select></label>
+        <label class="field">PIN<input id="invPin" type="password" inputmode="numeric" autocomplete="off" maxlength="8"></label>
+      </div>
+      <button class="btn punch-btn" id="invBtn" disabled>Log to Inventory</button>
+      <p class="clock-msg" id="invMsg" role="status"></p>
+    </div>
   </section>
 
   <!-- ===================== CALCULATOR ===================== -->
@@ -432,7 +461,7 @@ const MENU = [
   {title:'Materials', color:'var(--cyan)', items:[
     {name:'Red Bins',  price:[80,100]},
   ]},
-  {title:'Crafted', color:'var(--pink)', items:[
+  {title:'General', color:'var(--pink)', items:[
     {name:'Across',         price:2000, sub:'1 of every part'},
     {name:'Lockpick',       price:2000},
     {name:'Adv Repair Kit', price:2500},
@@ -552,9 +581,17 @@ function filterMenu(){
   $('noMatch').hidden = any;
 }
 $('search').addEventListener('input', filterMenu);
-// press "/" anywhere on the menu to jump to search
+// search bar stays hidden until the magnifying glass (or "/") opens it; closing clears it
+function toggleSearch(open){
+  $('searchBox').hidden = !open;
+  $('searchToggle').setAttribute('aria-expanded', open);
+  if (open){ if (page !== 'menu') show('menu'); $('search').focus(); }
+  else { $('search').value = ''; filterMenu(); }
+}
+$('searchToggle').addEventListener('click', ()=>toggleSearch($('searchBox').hidden));
 addEventListener('keydown', e=>{
-  if (e.key==='/' && !$('menu').hidden && document.activeElement.tagName!=='INPUT'){ e.preventDefault(); $('search').focus(); }
+  if (e.key==='/' && !$('menu').hidden && document.activeElement.tagName!=='INPUT'){ e.preventDefault(); toggleSearch(true); }
+  if (e.key==='Escape' && document.activeElement===$('search')) toggleSearch(false);
 });
 
 // ---- calculator --------------------------------------------------------
@@ -690,6 +727,7 @@ let page = 'menu';
 $('menuGrid').addEventListener('click', e=>{
   const it = e.target.closest('[data-add]'); if (!it) return;
   const name = it.dataset.add;
+  if (invMode){ inv[name] = (inv[name] || 0) + 1; invMsg(''); return renderInv(); }
   (cart[name] ||= {qty:0, unit:lowPrice(ITEMS[name].price)}).qty++;
   saleMsg('');   // a new order is starting, so drop the last "Sale saved" note
   renderCart();
@@ -725,13 +763,67 @@ function refreshTotals(){
   $('cartBar').hidden = !count || page !== 'menu';
   $('cartBarCount').textContent = `${count} item${count===1?'':'s'}`;
   $('cartBarTotal').textContent = money(total);
-  document.querySelectorAll('#menuGrid [data-add]').forEach(it=>{
-    const q = cart[it.dataset.add]?.qty || 0, chip = it.querySelector('.incart');
-    chip.hidden = !q; chip.textContent = '×' + q;
-  });
+  refreshChips();
   store.set('bennys-cart', cart);
   updateSaleBtn();
 }
+// the ×N chip on menu items shows the order count, or the inventory count in inventory mode
+function refreshChips(){
+  document.querySelectorAll('#menuGrid [data-add]').forEach(it=>{
+    const n = it.dataset.add, q = (invMode ? inv[n] : cart[n]?.qty) || 0, chip = it.querySelector('.incart');
+    chip.hidden = !q; chip.textContent = '×' + q;
+  });
+}
+
+// ---- add to inventory (bottom of the price menu) -------------------------
+let invMode = false;
+const inv = {};                                                // name -> qty
+function renderInv(){
+  $('invRows').innerHTML = Object.entries(inv).map(([n,q])=>`<div class="row">
+      <div class="row-name"><b>${n}</b><small>${ITEMS[n].where}</small></div>
+      <div class="qty"><button class="btn" data-dec="${n}" aria-label="One less ${n}">−</button><input type="number" min="1" step="1" data-qty="${n}" value="${q}" aria-label="${n} quantity"><button class="btn" data-inc="${n}" aria-label="One more ${n}">+</button></div>
+      <button class="btn small" data-del="${n}" aria-label="Remove ${n}">✕</button>
+    </div>`).join('');
+  refreshChips(); updateInvBtn();
+}
+function updateInvBtn(){
+  const count = Object.values(inv).reduce((a,b)=>a+b, 0);
+  $('invBtn').textContent = count ? `Log ${count} to Inventory` : 'Log to Inventory';
+  $('invBtn').disabled = !$('invName').value || !count || !CLOCK_URL;
+}
+$('invMode').addEventListener('click', ()=>{
+  invMode = !invMode;
+  $('invMode').setAttribute('aria-pressed', invMode);
+  $('invMode').textContent = `Inventory mode: ${invMode ? 'On' : 'Off'}`;
+  document.body.classList.toggle('inv-mode', invMode);
+  refreshChips();
+});
+$('invRows').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if (!b) return;
+  const {inc, dec, del} = b.dataset;
+  if (inc) inv[inc]++;
+  if (dec && --inv[dec] < 1) delete inv[dec];
+  if (del) delete inv[del];
+  renderInv();
+});
+$('invRows').addEventListener('change', e=>{
+  const n = e.target.dataset.qty, v = Math.floor(Number(e.target.value)) || 0;
+  if (n){ if (v < 1) delete inv[n]; else inv[n] = v; renderInv(); }
+});
+$('invName').addEventListener('change', ()=>{ store.set('bennys-name', $('invName').value); updateInvBtn(); invMsg(''); });
+$('invPin').addEventListener('keydown', e=>{ if (e.key==='Enter') $('invBtn').click(); });
+$('invBtn').addEventListener('click', async ()=>{
+  const name = $('invName').value, pin = $('invPin').value.trim();
+  const items = Object.entries(inv).map(([n,q])=>({name:n, qty:q, unit:lowPrice(ITEMS[n].price)}));
+  if (!pin) return invMsg('Enter your PIN.', 'err');
+  $('invBtn').disabled = true; invMsg('Logging…');
+  try{
+    const r = await clockCall({name, pin, action:'craft', items});
+    invMsg(r.ok ? r.message.replace('Crafting', 'Inventory') : r.error, r.ok ? 'ok' : 'err');
+    if (r.ok){ $('invPin').value = ''; for (const n in inv) delete inv[n]; renderInv(); }
+  }catch(e){ invMsg("Couldn't log it. Try again.", 'err'); }
+  updateInvBtn();
+});
 
 $('orderRows').addEventListener('click', e=>{
   const b = e.target.closest('button'); if (!b) return;
@@ -776,6 +868,7 @@ function setMsg(id, text, kind){ $(id).textContent = text; $(id).className = 'cl
 const clockMsg = (text, kind) => setMsg('clockMsg', text, kind);
 const saleMsg  = (text, kind) => setMsg('saleMsg', text, kind);
 const craftMsg = (text, kind) => setMsg('craftMsg', text, kind);
+const invMsg   = (text, kind) => setMsg('invMsg', text, kind);
 
 async function clockCall(body){
   // text/plain keeps the request "simple", so Google's web app accepts it from this site
@@ -785,7 +878,7 @@ async function clockCall(body){
 async function loadClock(){
   if (!CLOCK_URL) return clockMsg("The time clock isn't connected yet.", 'err');
   try{ clock = await clockCall(); renderClock(); }
-  catch(e){ const t = "Can't reach the time clock. Check your connection."; clockMsg(t, 'err'); saleMsg(t, 'err'); craftMsg(t, 'err'); }
+  catch(e){ const t = "Can't reach the time clock. Check your connection."; clockMsg(t, 'err'); saleMsg(t, 'err'); craftMsg(t, 'err'); invMsg(t, 'err'); }
 }
 function nameOptions(names, picked, blank){
   return `<option value="">${blank}</option>` + names.map(n=>`<option${n===picked?' selected':''}>${esc(n)}</option>`).join('');
@@ -797,7 +890,8 @@ function renderClock(){
   const on = clock.onShift.map(s=>s.name);
   $('saleName').innerHTML = nameOptions(on, $('saleName').value || saved, on.length ? 'Pick your name' : 'Nobody is punched in');
   $('craftName').innerHTML = nameOptions(on, $('craftName').value || saved, on.length ? 'Pick your name' : 'Nobody is punched in');
-  updateSaleBtn(); updateCraftBtn();
+  $('invName').innerHTML = nameOptions(on, $('invName').value || saved, on.length ? 'Pick your name' : 'Nobody is punched in');
+  updateSaleBtn(); updateCraftBtn(); updateInvBtn();
   $('onShift').innerHTML = clock.onShift.length
     ? clock.onShift.map(s=>`<li><span><span class="dot"></span>${esc(s.name)}</span>
         <span class="since">since ${new Date(s.since).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})} · ${since(s.since)}</span></li>`).join('')
@@ -866,7 +960,7 @@ $('craftBtn').addEventListener('click', async ()=>{
   updateCraftBtn();
 });
 
-setInterval(()=>{ if (page!=='menu') loadClock(); }, 60000);   // keep "on shift" fresh
+setInterval(loadClock, 60000);   // keep "on shift" fresh
 
 // ---- pages: menu is the landing page; #calc, #checkout and #clock open the others --
 const PAGES = ['menu','calc','checkout','clock'];
@@ -876,7 +970,7 @@ function show(p){
   document.querySelectorAll('nav a').forEach(a=>
     a.setAttribute('aria-current', a.getAttribute('href') === '#'+p ? 'page' : 'false'));
   refreshTotals();
-  if (p !== 'menu') loadClock();
+  loadClock();
 }
 document.querySelectorAll('nav a, a.link').forEach(a=>a.addEventListener('click', e=>{
   e.preventDefault();
