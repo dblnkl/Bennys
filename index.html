@@ -129,7 +129,9 @@
   button.item{width:100%;background:none;border:0;font:inherit;color:inherit;text-align:left;cursor:pointer;transition:background .12s}
   button.item:hover{background:var(--panel2)}
   button.item:active{background:var(--line)}
-  .incart{font-family:var(--num);font-size:16px;letter-spacing:.03em;background:var(--c);color:#111;border-radius:6px;padding:0 6px;margin-left:8px}
+  .incart{font-family:var(--num);font-size:16px;letter-spacing:.03em;background:var(--c);color:#111;border-radius:6px;padding:1px 9px;margin-left:8px;cursor:pointer}
+  .incart::after{content:'×' attr(data-q)}
+  .incart:hover{background:var(--ink)} .incart:hover::after{content:'−1'}   /* tap the chip to take one away */
   .badge{font-family:var(--sans);font-size:12px;font-weight:800;background:var(--pink);color:#fff;border-radius:999px;padding:1px 7px;margin-left:6px;vertical-align:2px}
   .note a.link{color:var(--cyan)}
 
@@ -558,7 +560,7 @@ $('menuGrid').innerHTML = MENU.map(c=>{
     if (i.section){ sec = i.section; return `<div class="subhead" data-sec="${sec}">${sec}</div>`; }
     // search text: card + section + name + note + price, so "stage 5", "engines" or "50,000" all work
     const key = `${c.title} ${sec} ${i.name} ${i.sub||''} ${priceText(i.price)}`.toLowerCase();
-    return `<button class="item" data-add="${i.name}" data-sec="${sec}" data-key="${key}"><span class="name">${i.name}<span class="incart" hidden></span>${i.sub?`<span class="sub">${i.sub}</span>`:''}</span>
+    return `<button class="item" data-add="${i.name}" data-sec="${sec}" data-key="${key}"><span class="name">${i.name}<span class="incart" title="Tap to take one away" hidden></span>${i.sub?`<span class="sub">${i.sub}</span>`:''}</span>
     <span class="lead"></span><span class="price">${priceText(i.price)}</span></button>`;
   }).join('')}
   </div>`;
@@ -727,6 +729,12 @@ let page = 'menu';
 $('menuGrid').addEventListener('click', e=>{
   const it = e.target.closest('[data-add]'); if (!it) return;
   const name = it.dataset.add;
+  // tapping the ×N chip takes one away; tapping anywhere else on the item adds one
+  if (e.target.closest('.incart')){
+    if (invMode){ if (--inv[name] < 1) delete inv[name]; return renderInv(); }
+    if (cart[name] && --cart[name].qty < 1) delete cart[name];
+    return renderCart();
+  }
   if (invMode){ inv[name] = (inv[name] || 0) + 1; invMsg(''); return renderInv(); }
   (cart[name] ||= {qty:0, unit:lowPrice(ITEMS[name].price)}).qty++;
   saleMsg('');   // a new order is starting, so drop the last "Sale saved" note
@@ -771,7 +779,7 @@ function refreshTotals(){
 function refreshChips(){
   document.querySelectorAll('#menuGrid [data-add]').forEach(it=>{
     const n = it.dataset.add, q = (invMode ? inv[n] : cart[n]?.qty) || 0, chip = it.querySelector('.incart');
-    chip.hidden = !q; chip.textContent = '×' + q;
+    chip.hidden = !q; chip.dataset.q = q;
   });
 }
 
