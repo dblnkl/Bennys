@@ -19,8 +19,11 @@
  * Employees:    Name | PIN. Add or delete rows to manage staff.
  * Shifts:       one row per shift (Name | Clock In | Clock Out | Hours). You can fix times by hand; Hours updates itself.
  * Hours:        per employee: hours this week (since Monday) and hours all time.
- * Sales:        one row per completed sale (Time | Employee | Items | Total).
- * Sales Totals: per employee: sales this week (since Monday) and sales all time.
+ * Sales:        one row per completed sale (Time | Employee | Items | Total | This Week | Commission).
+ *               "This Week" repeats the total only for sales since Monday, so its column total is this week's sales.
+ *               "Commission" is $500 per Across sold (After Dark too). Change COMMISSION_PER_ACROSS to change it.
+ * Sales Totals: per employee: sales this week (since Monday), sales all time,
+ *               commission this week, and commission last week (Mon-Sun, the amount to pay).
  * Crafting:     one row per crafting log from the site (Time | Employee | Items).
  * Inventory:    stock per item. Crafting adds, sales subtract. Fix "In Stock" by hand after a count;
  *               add a row (Item name as on the menu, In Stock) to start tracking anything else.
@@ -30,6 +33,8 @@ const MAX_WRONG_PINS = 5;   // wrong PINs allowed per name...
 const LOCKOUT_MINUTES = 10; // ...before that name is locked for this long
 const HOURS_FORMULA = '=IF(RC[-1]="","",ROUND((RC[-1]-RC[-2])*24,2))';
 const MONDAY = '(TODAY()-WEEKDAY(TODAY(),3))';
+const THIS_WEEK_FORMULA = `=IF(RC[-4]>=${MONDAY},RC[-1],"")`;   // Sales col E: the sale's total if it's from this week
+const COMMISSION_PER_ACROSS = 500;   // paid per Across sold, After Dark ones included
 const DATE_FORMAT = 'ddd m/d/yyyy h:mm am/pm';
 
 function setup() {
@@ -74,12 +79,20 @@ function setup() {
   shifts.getRange('B:C').setNumberFormat(DATE_FORMAT);
   paint(shifts, '#1fd6e8', 4);
   shifts.setColumnWidths(2, 2, 210);
-  const sales = tab('Sales', ['Time', 'Employee', 'Items', 'Total']);
+  const sales = tab('Sales', ['Time', 'Employee', 'Items', 'Total', 'This Week', 'Commission']);
+  sales.getRange('E1:F1').setValues([['This Week', 'Commission']]);   // older sheets were made with fewer columns
+  const nSales = sales.getLastRow() - 1;
+  if (nSales > 0) {
+    sales.getRange(2, 5, nSales, 1).setFormulaR1C1(THIS_WEEK_FORMULA);
+    // fill in commission for older sales that don't have it yet (worked out from the Items text)
+    const old = sales.getRange(2, 3, nSales, 4).getValues();   // C..F
+    sales.getRange(2, 6, nSales, 1).setValues(old.map(r => [r[3] === '' ? commission(r[0]) : r[3]]));
+  }
   sales.getRange('A:A').setNumberFormat(DATE_FORMAT);
-  sales.getRange('D:D').setNumberFormat('$#,##0');
-  paint(sales, '#ff7b1c', 4);
+  sales.getRange('D:F').setNumberFormat('$#,##0');
+  paint(sales, '#ff7b1c', 6);
   sales.setColumnWidth(1, 210).setColumnWidth(3, 420);
-  sales.getRange('D2:D').setFontColor('#3ee08a').setFontWeight('bold');
+  sales.getRange('D2:F').setFontColor('#3ee08a').setFontWeight('bold');
   const crafting = tab('Crafting', ['Time', 'Employee', 'Items']);
   crafting.getRange('A:A').setNumberFormat(DATE_FORMAT);
   paint(crafting, '#3ee08a', 3);
@@ -93,8 +106,16 @@ function setup() {
   inv.getRange('B2:B').setFontWeight('bold').setFontSize(13);
 
   paint(totals('Hours', ['Employee', 'Hours this week (since Monday)', 'Hours all time'], 'Shifts', 'A', 'D', 'B'), '#ffd60a', 3);
-  paint(totals('Sales Totals', ['Employee', 'Sales this week (since Monday)', 'Sales all time'], 'Sales', 'B', 'D', 'A', '$#,##0'), '#9b5cff', 3);
+  const st = totals('Sales Totals', ['Employee', 'Sales this week (since Monday)', 'Sales all time'], 'Sales', 'B', 'D', 'A', '$#,##0');
+  // commission: this week so far, and last week (Mon to Sun) for weekly pay
+  const c = 'Sales!F2:F', n = 'Sales!B2:B', t = 'Sales!A2:A';
+  st.getRange('D1:E1').setValues([['Commission this week', 'Commission last week (to pay)']]).setFontWeight('bold');
+  st.getRange('D2').setFormula(`=MAP(A2:A,LAMBDA(e,IF(e="",,SUMIFS(${c},${n},e,${t},">="&${MONDAY}))))`);
+  st.getRange('E2').setFormula(`=MAP(A2:A,LAMBDA(e,IF(e="",,SUMIFS(${c},${n},e,${t},">="&(${MONDAY}-7),${t},"<"&${MONDAY}))))`);
+  st.getRange('D:E').setNumberFormat('$#,##0');
+  paint(st, '#9b5cff', 5);
   ['Hours', 'Sales Totals'].forEach(n => ss.getSheetByName(n).setColumnWidths(2, 2, 260));
+  st.setColumnWidths(4, 2, 260);
 
   const blank = ss.getSheetByName('Sheet1');
   if (blank && blank.getLastRow() === 0) ss.deleteSheet(blank);
@@ -183,7 +204,9 @@ function order(who, items, action) {
     SpreadsheetApp.getActive().getSheetByName('Crafting').appendRow([new Date(), who, parts.join(', ')]);
     return { ok: true, message: `Crafting logged for ${who}.` };
   }
-  SpreadsheetApp.getActive().getSheetByName('Sales').appendRow([new Date(), who, parts.join(', '), total]);
+  const sales = SpreadsheetApp.getActive().getSheetByName('Sales');
+  sales.appendRow([new Date(), who, parts.join(', '), total, '', commission(parts.join(', '))]);
+  sales.getRange(sales.getLastRow(), 5).setFormulaR1C1(THIS_WEEK_FORMULA);
   return { ok: true, total, message: `Sale saved: $${total.toLocaleString('en-US')} by ${who}.` };
 }
 
@@ -208,6 +231,15 @@ function stock(items, craft) {
     if (craft) r[2] = Number(r[2] || 0) + qty; else r[3] = Number(r[3] || 0) + qty;
     inv.getRange(i + 2, 2, 1, 4).setValues([[r[1], r[2], r[3], now]]);
   }
+}
+
+// commission for one sale, from its Items text, e.g. "2x Across (After Dark), Across, 3x Lockpick" -> 3 acrosses
+function commission(itemsText) {
+  const acrosses = String(itemsText).split(', ').reduce((sum, part) => {
+    const m = part.trim().match(/^(?:(\d+)x )?Across(?: \(After Dark\))?$/i);
+    return sum + (m ? Number(m[1] || 1) : 0);
+  }, 0);
+  return acrosses * COMMISSION_PER_ACROSS;
 }
 
 function status() {
