@@ -40,7 +40,7 @@ const s = post({name:'Ana', pin:'0420', action:'sale', items:order});
 assert.strictEqual(s.ok, true); assert.strictEqual(s.total, 122000);
 const row = sheets.Sales.data[1];
 assert.strictEqual(row[1], 'Ana'); assert.strictEqual(row[2], '2x S5 Brakes, Racing Chip'); assert.strictEqual(row[3], 122000);
-assert.strictEqual(row[4], '(formula)', 'This Week formula on each sale row');
+assert.strictEqual(row.length, 5, 'Time | Employee | Items | Total | Commission');
 assert.match(post({name:'Cy', pin:'2222', action:'sale', items:order}).error, /must be punched in/);
 assert.match(post({name:'Ana', pin:'9999', action:'sale', items:order}).error, /Wrong name or PIN/);
 assert.match(post({name:'Ana', pin:'0420', action:'sale', items:[]}).error, /empty/);
@@ -66,8 +66,8 @@ assert.strictEqual(inv('Across').slice(1,4).join(), '3,5,2', 'After Dark across 
 assert.strictEqual(inv('Lockpick').slice(1,4).join(), '7,10,3');
 assert.strictEqual(sheets.Sales.data.at(-1)[2], '2x Across (After Dark), 3x Lockpick');
 assert.strictEqual(sheets.Sales.data.at(-1)[3], 9400);
-assert.strictEqual(sheets.Sales.data.at(-1)[5], 1000, '$500 per Across, After Dark included');
-assert.strictEqual(sheets.Sales.data[1][5], 0, 'no acrosses, no commission');
+assert.strictEqual(sheets.Sales.data.at(-1)[4], 1000, '$500 per Across, After Dark included');
+assert.strictEqual(sheets.Sales.data[1][4], 0, 'no acrosses, no commission');
 
 // commission from Items text (also used to fill in older sales)
 assert.strictEqual(ctx.commission('2x Across (After Dark), Across, 3x Lockpick'), 1500);

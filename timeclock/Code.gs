@@ -6,7 +6,7 @@
  * 1. Make a new Google Sheet (go to sheets.new) and name it "Benny's Time Clock".
  * 2. In the sheet: Extensions > Apps Script. Delete the sample code, paste this whole file, click Save.
  * 3. In the function dropdown at the top pick "setup", click Run, and allow access when Google asks.
- *    This creates the Employees, Shifts, Hours, Sales, Sales Totals, Crafting and Inventory tabs.
+ *    This creates the Employees, Shifts, Hours, Sales, This Week, Sales Totals, Crafting and Inventory tabs.
  * 4. In the Employees tab, type each employee's name in column A and their PIN in column B.
  * 5. Deploy > New deployment > gear icon > Web app.
  *    Execute as: Me.  Who has access: Anyone.  Click Deploy.
@@ -16,14 +16,15 @@
  * then Deploy > Manage deployments > pencil icon > Version: New version > Deploy. That keeps the same URL.
  *
  * TABS
- * Employees:    Name | PIN. Add or delete rows to manage staff.
+ * Employees:    Name | PIN | Commission this week | Commission all time. Add or delete rows (Name and PIN) to
+ *               manage staff. The two commission columns fill themselves; don't type in them.
  * Shifts:       one row per shift (Name | Clock In | Clock Out | Hours). You can fix times by hand; Hours updates itself.
  * Hours:        per employee: hours this week (since Monday) and hours all time.
- * Sales:        one row per completed sale (Time | Employee | Items | Total | This Week | Commission).
- *               "This Week" repeats the total only for sales since Monday, so its column total is this week's sales.
+ * Sales:        one row per completed sale (Time | Employee | Items | Total | Commission).
  *               "Commission" is $500 per Across sold (After Dark too). Change COMMISSION_PER_ACROSS to change it.
+ * This Week:    the Sales rows since Monday (fills itself; resets every Monday).
  * Sales Totals: per employee: sales this week (since Monday), sales all time,
- *               commission this week, and commission last week (Mon-Sun, the amount to pay).
+ *               and commission last week (Mon-Sun, the amount to pay).
  * Crafting:     one row per crafting log from the site (Time | Employee | Items).
  * Inventory:    stock per item. Crafting adds, sales subtract. Fix "In Stock" by hand after a count;
  *               add a row (Item name as on the menu, In Stock) to start tracking anything else.
@@ -33,7 +34,6 @@ const MAX_WRONG_PINS = 5;   // wrong PINs allowed per name...
 const LOCKOUT_MINUTES = 10; // ...before that name is locked for this long
 const HOURS_FORMULA = '=IF(RC[-1]="","",ROUND((RC[-1]-RC[-2])*24,2))';
 const MONDAY = '(TODAY()-WEEKDAY(TODAY(),3))';
-const THIS_WEEK_FORMULA = `=IF(RC[-4]>=${MONDAY},RC[-1],"")`;   // Sales col E: the sale's total if it's from this week
 const COMMISSION_PER_ACROSS = 500;   // paid per Across sold, After Dark ones included
 const DATE_FORMAT = 'ddd m/d/yyyy h:mm am/pm';
 
@@ -74,25 +74,45 @@ function setup() {
 
   const emps = tab('Employees', ['Name', 'PIN']);
   emps.getRange('B:B').setNumberFormat('@'); // text, so PINs like 0420 keep their 0
-  paint(emps, '#ff2e9a', 2);
   const shifts = tab('Shifts', ['Name', 'Clock In', 'Clock Out', 'Hours']);
   shifts.getRange('B:C').setNumberFormat(DATE_FORMAT);
   paint(shifts, '#1fd6e8', 4);
   shifts.setColumnWidths(2, 2, 210);
-  const sales = tab('Sales', ['Time', 'Employee', 'Items', 'Total', 'This Week', 'Commission']);
-  sales.getRange('E1:F1').setValues([['This Week', 'Commission']]);   // older sheets were made with fewer columns
+  const sales = tab('Sales', ['Time', 'Employee', 'Items', 'Total', 'Commission']);
+  if (sales.getRange('E1').getValue() === 'This Week') sales.deleteColumn(5);   // that column moved to its own tab
+  sales.getRange('E1').setValue('Commission');   // older sheets were made with 4 columns
   const nSales = sales.getLastRow() - 1;
   if (nSales > 0) {
-    sales.getRange(2, 5, nSales, 1).setFormulaR1C1(THIS_WEEK_FORMULA);
     // fill in commission for older sales that don't have it yet (worked out from the Items text)
-    const old = sales.getRange(2, 3, nSales, 4).getValues();   // C..F
-    sales.getRange(2, 6, nSales, 1).setValues(old.map(r => [r[3] === '' ? commission(r[0]) : r[3]]));
+    const old = sales.getRange(2, 3, nSales, 3).getValues();   // C..E
+    sales.getRange(2, 5, nSales, 1).setValues(old.map(r => [r[2] === '' ? commission(r[0]) : r[2]]));
   }
   sales.getRange('A:A').setNumberFormat(DATE_FORMAT);
-  sales.getRange('D:F').setNumberFormat('$#,##0');
-  paint(sales, '#ff7b1c', 6);
+  sales.getRange('D:E').setNumberFormat('$#,##0');
+  paint(sales, '#ff7b1c', 5);
   sales.setColumnWidth(1, 210).setColumnWidth(3, 420);
-  sales.getRange('D2:F').setFontColor('#3ee08a').setFontWeight('bold');
+  sales.getRange('D2:E').setFontColor('#3ee08a').setFontWeight('bold');
+
+  // Employees: commission next to each name (Sales column E), this week and all time
+  emps.getRange('C1:D1').setValues([['Commission this week', 'Commission all time']]);
+  emps.getRange('C2').setFormula(`=MAP(A2:A,LAMBDA(e,IF(e="",,SUMIFS(Sales!E2:E,Sales!B2:B,e,Sales!A2:A,">="&${MONDAY}))))`);
+  emps.getRange('D2').setFormula(`=MAP(A2:A,LAMBDA(e,IF(e="",,SUMIFS(Sales!E2:E,Sales!B2:B,e))))`);
+  emps.getRange('C:D').setNumberFormat('$#,##0');
+  paint(emps, '#ff2e9a', 4);
+  emps.setColumnWidths(3, 2, 220);
+  emps.getRange('C2:D').setFontColor('#3ee08a').setFontWeight('bold');
+
+  // This Week: the Sales rows since Monday (formula only, rebuilt each run)
+  const week = ss.getSheetByName('This Week') || ss.insertSheet('This Week');
+  week.clear();
+  week.getRange('A1:E1').setValues([['Time', 'Employee', 'Items', 'Total', 'Commission']]);
+  week.setFrozenRows(1);
+  week.getRange('A2').setFormula(`=IFERROR(FILTER(Sales!A2:E,Sales!A2:A>=${MONDAY}),)`);
+  week.getRange('A:A').setNumberFormat(DATE_FORMAT);
+  week.getRange('D:E').setNumberFormat('$#,##0');
+  paint(week, '#ff7b1c', 5);
+  week.setColumnWidth(1, 210).setColumnWidth(3, 420);
+  week.getRange('D2:E').setFontColor('#3ee08a').setFontWeight('bold');
   const crafting = tab('Crafting', ['Time', 'Employee', 'Items']);
   crafting.getRange('A:A').setNumberFormat(DATE_FORMAT);
   paint(crafting, '#3ee08a', 3);
@@ -107,15 +127,14 @@ function setup() {
 
   paint(totals('Hours', ['Employee', 'Hours this week (since Monday)', 'Hours all time'], 'Shifts', 'A', 'D', 'B'), '#ffd60a', 3);
   const st = totals('Sales Totals', ['Employee', 'Sales this week (since Monday)', 'Sales all time'], 'Sales', 'B', 'D', 'A', '$#,##0');
-  // commission: this week so far, and last week (Mon to Sun) for weekly pay
-  const c = 'Sales!F2:F', n = 'Sales!B2:B', t = 'Sales!A2:A';
-  st.getRange('D1:E1').setValues([['Commission this week', 'Commission last week (to pay)']]).setFontWeight('bold');
-  st.getRange('D2').setFormula(`=MAP(A2:A,LAMBDA(e,IF(e="",,SUMIFS(${c},${n},e,${t},">="&${MONDAY}))))`);
-  st.getRange('E2').setFormula(`=MAP(A2:A,LAMBDA(e,IF(e="",,SUMIFS(${c},${n},e,${t},">="&(${MONDAY}-7),${t},"<"&${MONDAY}))))`);
-  st.getRange('D:E').setNumberFormat('$#,##0');
-  paint(st, '#9b5cff', 5);
+  // last week's commission (Mon to Sun), the amount to pay; this week's is on the Employees tab
+  const c = 'Sales!E2:E', n = 'Sales!B2:B', t = 'Sales!A2:A';
+  st.getRange('D1').setValue('Commission last week (to pay)').setFontWeight('bold');
+  st.getRange('D2').setFormula(`=MAP(A2:A,LAMBDA(e,IF(e="",,SUMIFS(${c},${n},e,${t},">="&(${MONDAY}-7),${t},"<"&${MONDAY}))))`);
+  st.getRange('D:D').setNumberFormat('$#,##0');
+  paint(st, '#9b5cff', 4);
   ['Hours', 'Sales Totals'].forEach(n => ss.getSheetByName(n).setColumnWidths(2, 2, 260));
-  st.setColumnWidths(4, 2, 260);
+  st.setColumnWidth(4, 260);
 
   const blank = ss.getSheetByName('Sheet1');
   if (blank && blank.getLastRow() === 0) ss.deleteSheet(blank);
@@ -205,8 +224,7 @@ function order(who, items, action) {
     return { ok: true, message: `Crafting logged for ${who}.` };
   }
   const sales = SpreadsheetApp.getActive().getSheetByName('Sales');
-  sales.appendRow([new Date(), who, parts.join(', '), total, '', commission(parts.join(', '))]);
-  sales.getRange(sales.getLastRow(), 5).setFormulaR1C1(THIS_WEEK_FORMULA);
+  sales.appendRow([new Date(), who, parts.join(', '), total, commission(parts.join(', '))]);
   return { ok: true, total, message: `Sale saved: $${total.toLocaleString('en-US')} by ${who}.` };
 }
 
