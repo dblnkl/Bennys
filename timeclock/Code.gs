@@ -59,14 +59,14 @@ function setup() {
     if (format) sh.getRange('B:C').setNumberFormat(format);
     return sh;
   };
-  // Benny's look: dark rows with light text, a graffiti-font header in the tab's neon color
+  // Benny's look: dark rows with light Arial text, a Bree Serif header in the tab's neon color
   const paint = (sh, accent, width) => {
     const all = sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns());
     all.setBackground('#0f0d15').setFontColor('#f5f2fa').setFontFamily('Arial').setFontSize(11).setVerticalAlignment('middle');
     sh.getBandings().forEach(b => b.remove());
     sh.getRange(1, 1, sh.getMaxRows(), width).applyRowBanding(SpreadsheetApp.BandingTheme.GREY, true, false)
       .setHeaderRowColor('#000000').setFirstRowColor('#1a1722').setSecondRowColor('#24202e');
-    sh.getRange(1, 1, 1, width).setFontFamily('Permanent Marker').setFontSize(13).setFontColor(accent).setFontWeight('bold')
+    sh.getRange(1, 1, 1, width).setFontFamily('Bree Serif').setFontSize(13).setFontColor(accent).setFontWeight('bold')
       .setBorder(null, null, true, null, null, null, accent, SpreadsheetApp.BorderStyle.SOLID_THICK);
     sh.setRowHeight(1, 36).setHiddenGridlines(true).setTabColor(accent);
     for (let c = 1; c <= width; c++) if (sh.getColumnWidth(c) < 150) sh.setColumnWidth(c, 150);
@@ -157,7 +157,8 @@ function doPost(e) {
     const isOrder = body.action === 'sale' || body.action === 'craft';
     return json(isOrder ? order(who.name, body.items, body.action) : punch(who.name, body.action));
   } catch (err) {
-    return json({ ok: false, error: 'Something went wrong. Try again.' });
+    console.error(err);   // shows in Apps Script > Executions
+    return json({ ok: false, error: `Something went wrong: ${err.message}` });
   } finally {
     lock.releaseLock();
   }
@@ -184,7 +185,7 @@ function openShiftRow(who) {
 }
 
 function punch(who, action) {
-  const shifts = SpreadsheetApp.getActive().getSheetByName('Shifts');
+  const shifts = sheet('Shifts');
   const open = openShiftRow(who);
   if (action === 'in') {
     if (open >= 0) return Object.assign(status(), { ok: false, error: `${who} is already punched in.` });
@@ -220,10 +221,10 @@ function order(who, items, action) {
   }
   stock(items, craft);
   if (craft) {
-    SpreadsheetApp.getActive().getSheetByName('Crafting').appendRow([new Date(), who, parts.join(', ')]);
+    sheet('Crafting').appendRow([new Date(), who, parts.join(', ')]);
     return { ok: true, message: `Crafting logged for ${who}.` };
   }
-  const sales = SpreadsheetApp.getActive().getSheetByName('Sales');
+  const sales = sheet('Sales');
   sales.appendRow([new Date(), who, parts.join(', '), total, commission(parts.join(', '))]);
   return { ok: true, total, message: `Sale saved: $${total.toLocaleString('en-US')} by ${who}.` };
 }
@@ -231,7 +232,7 @@ function order(who, items, action) {
 // Inventory tab: crafting adds stock, sales take it away. "Across (After Dark)" counts as "Across".
 // Crafting a new item adds its row; selling an item with no row is not tracked (add a row to track it).
 function stock(items, craft) {
-  const inv = SpreadsheetApp.getActive().getSheetByName('Inventory');
+  const inv = sheet('Inventory');
   const data = rows('Inventory');
   const now = new Date();
   for (const it of items) {
@@ -268,9 +269,16 @@ function status() {
   return { ok: true, employees, onShift };
 }
 
+// a tab by name, with a clear error if it was renamed or deleted (running setup recreates missing tabs)
+function sheet(tabName) {
+  const sh = SpreadsheetApp.getActive().getSheetByName(tabName);
+  if (!sh) throw new Error(`the "${tabName}" tab is missing. Was it renamed or deleted? Rename it back, or run setup to make a new one.`);
+  return sh;
+}
+
 // data rows of a tab (skips the header row)
 function rows(tabName) {
-  const sh = SpreadsheetApp.getActive().getSheetByName(tabName);
+  const sh = sheet(tabName);
   const n = sh.getLastRow() - 1;
   return n > 0 ? sh.getRange(2, 1, n, sh.getLastColumn()).getValues() : [];
 }

@@ -76,4 +76,9 @@ assert.strictEqual(ctx.commission('S5 Brakes, Racing Chip'), 0);
 assert.strictEqual(ctx.commission(''), 0);
 post({name:'Cy', pin:'2222', action:'sale', items:[{name:'Across', qty:1, unit:2000}]});
 assert.strictEqual(inv('Across')[1], 3, 'rejected sale leaves stock alone');
+// a missing tab gives a clear error, not "Cannot read properties of null"
+ctx.console = {error(){}};
+const salesTab = sheets.Sales; delete sheets.Sales;
+assert.match(post({name:'Ana', pin:'0420', action:'sale', items:[{name:'Across', qty:1, unit:2000}]}).error, /"Sales" tab is missing/);
+sheets.Sales = salesTab;
 console.log('all time clock checks passed');
